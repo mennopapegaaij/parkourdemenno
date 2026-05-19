@@ -24,18 +24,13 @@ from ursina import (
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 2
+BAAN_VERSIE = 3
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
 OPSLAG_BESTAND = Path(__file__).with_name("savegame.json")
 
-AANTAL_FASES = 10
-SPRONGEN_PER_FASE = 130
-TOTAAL_SPRONGEN = AANTAL_FASES * SPRONGEN_PER_FASE
-CHECKPOINT_INTERVAL = 50
-
-FASE_NAMEN = [
+STIJL_NAMEN = [
     "makkelijke start",
     "zachte bochten",
     "trap omhoog",
@@ -48,7 +43,7 @@ FASE_NAMEN = [
     "eindbaas",
 ]
 
-FASE_KLEUREN = [
+STIJL_KLEUREN = [
     color.azure,
     color.lime,
     color.orange,
@@ -61,22 +56,7 @@ FASE_KLEUREN = [
     color.rgb(255, 100, 100),
 ]
 
-FASE_SCHALEN = [
-    (6.8, 6.8),
-    (6.2, 6.0),
-    (5.8, 5.6),
-    (5.0, 4.8),
-    (4.5, 4.4),
-    (3.4, 3.2),
-    (3.2, 3.0),
-    (2.8, 2.8),
-    (2.5, 2.5),
-    (2.3, 2.4),
-]
-
-FASE_GAPS = [1.8, 1.95, 2.1, 2.25, 2.4, 2.55, 2.7, 2.85, 3.0, 3.1]
-
-FASE_Z_PATROON = [
+STIJL_Z_PATROON = [
     [0.0, 0.4, 0.0, -0.4],
     [0.0, 1.0, 1.8, 1.0, 0.0, -1.0, -1.8, -1.0],
     [0.0, 0.8, 1.6, 2.4, 1.6, 0.8, 0.0, -0.8, -1.6, -2.4, -1.6, -0.8],
@@ -89,7 +69,7 @@ FASE_Z_PATROON = [
     [0.0, 2.4, 4.8, 6.0, 4.8, 2.4, 0.0, -2.4, -4.8, -6.0, -4.8, -2.4],
 ]
 
-FASE_Y_PATROON = [
+STIJL_Y_PATROON = [
     [0.0, 0.0, 0.1, 0.1],
     [0.0, 0.1, 0.2, 0.1, 0.0, 0.1, 0.2, 0.1],
     [0.0, 0.15, 0.3, 0.45, 0.6, 0.45, 0.3, 0.15],
@@ -102,38 +82,62 @@ FASE_Y_PATROON = [
     [0.1, 0.35, 0.6, 0.85, 0.6, 0.35, 0.1, 0.35, 0.6, 0.85, 0.6, 0.35],
 ]
 
+AANTAL_LEVELS = 100
+SPRONGEN_PER_LEVEL = 13
+TOTAAL_SPRONGEN = AANTAL_LEVELS * SPRONGEN_PER_LEVEL
+CHECKPOINT_INTERVAL = 26
+STER_INTERVAL = 10
+
+BEGIN_SCHAAL = (6.8, 6.8)
+EIND_SCHAAL = (2.3, 2.4)
+BEGIN_GAP = 1.8
+EIND_GAP = 3.1
+STARTPLATFORM_SCHAAL = 9.0
+FINISH_PLATFORM_SCHAAL = 12.0
+
+MOEILIJKHEID_NAMEN = [
+    "heel makkelijk",
+    "makkelijk",
+    "spannend",
+    "lastig",
+    "superslim",
+]
+
 
 def vec3_van(positie):
     """Maak van een tuple makkelijk een Vec3."""
     return Vec3(positie[0], positie[1], positie[2])
 
 
-def voeg_muren_toe(muur_data, fase, x, y, breedte, gap, z):
-    """Maak muurstukken voor de fases waar je langs muren moet springen."""
+def voeg_muren_toe(muur_data, level_nummer, stijl, x, y, breedte, gap, z):
+    """Maak muurstukken voor de levels waar je langs muren moet springen."""
     muur_lengte = breedte + gap + 2.5
     muur_kleur = color.rgba(235, 235, 255, 170)
 
-    if fase == 5:
+    if level_nummer < 55:
+        return
+
+    if stijl == 5:
         muur_data.append(
             {"positie": (x, y + 3.4, 7.2), "schaal": (muur_lengte, 7.0, 1.2), "kleur": muur_kleur}
         )
-    elif fase == 6:
+    elif stijl == 6:
         muur_data.append(
             {"positie": (x, y + 3.4, -7.2), "schaal": (muur_lengte, 7.0, 1.2), "kleur": muur_kleur}
         )
-    elif fase == 7:
+    elif stijl == 7:
         muur_data.append(
             {"positie": (x, y + 3.7, 7.4), "schaal": (muur_lengte, 7.4, 1.2), "kleur": muur_kleur}
         )
         muur_data.append(
             {"positie": (x, y + 3.7, -7.4), "schaal": (muur_lengte, 7.4, 1.2), "kleur": muur_kleur}
         )
-    elif fase == 8:
+    elif stijl == 8:
         actieve_kant = 7.5 if z >= 0 else -7.5
         muur_data.append(
             {"positie": (x, y + 4.0, actieve_kant), "schaal": (muur_lengte, 8.0, 1.2), "kleur": muur_kleur}
         )
-    elif fase == 9:
+    elif stijl == 9:
         muur_data.append(
             {"positie": (x, y + 4.2, 7.8), "schaal": (muur_lengte, 8.4, 1.2), "kleur": muur_kleur}
         )
@@ -143,63 +147,68 @@ def voeg_muren_toe(muur_data, fase, x, y, breedte, gap, z):
 
 
 def bouw_baangegevens():
-    """Bouw een baan die van makkelijk naar moeilijk gaat en 100 keer zo lang is."""
-    platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (9.0, 1.0, 9.0), "kleur": color.azure}]
+    """Bouw een baan met veel korte levels die steeds moeilijker worden."""
+    platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": color.azure}]
     muur_data = []
     checkpoint_posities = []
     ster_posities = []
-    fase_eindes = []
+    level_eindes = []
 
     x = 0.0
     y = 0.0
     z = 0.0
-    vorige_breedte = 9.0
+    vorige_breedte = STARTPLATFORM_SCHAAL
 
-    for fase in range(AANTAL_FASES):
-        basis_y = fase * 2.2
-        basis_breedte, basis_diepte = FASE_SCHALEN[fase]
-        z_pat = FASE_Z_PATROON[fase]
-        y_pat = FASE_Y_PATROON[fase]
+    for level in range(AANTAL_LEVELS):
+        moeilijkheid = level / max(1, AANTAL_LEVELS - 1)
+        stijl = level % len(STIJL_NAMEN)
+        basis_y = level * 0.22
+        z_pat = STIJL_Z_PATROON[stijl]
+        y_pat = STIJL_Y_PATROON[stijl]
+        basis_breedte = BEGIN_SCHAAL[0] + (EIND_SCHAAL[0] - BEGIN_SCHAAL[0]) * moeilijkheid
+        basis_diepte = BEGIN_SCHAAL[1] + (EIND_SCHAAL[1] - BEGIN_SCHAAL[1]) * moeilijkheid
 
-        for stap in range(SPRONGEN_PER_FASE):
-            wereld_stap = fase * SPRONGEN_PER_FASE + stap + 1
+        for stap in range(SPRONGEN_PER_LEVEL):
+            wereld_stap = level * SPRONGEN_PER_LEVEL + stap + 1
 
             breedte = max(2.1, basis_breedte - (stap % 4) * 0.08)
             diepte = max(2.2, basis_diepte - (stap % 3) * 0.06)
-            gap = FASE_GAPS[fase] + (stap % 3) * 0.12
+            gap = BEGIN_GAP + (EIND_GAP - BEGIN_GAP) * moeilijkheid + (stap % 3) * 0.12
 
             x += vorige_breedte / 2 + gap + breedte / 2
             y = basis_y + y_pat[stap % len(y_pat)]
             z = z_pat[stap % len(z_pat)]
 
-            if fase >= 8 and stap % 11 == 5:
+            if level >= 80 and stap % 11 == 5:
                 y += 0.2
 
             platform_data.append(
-                {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": FASE_KLEUREN[fase]}
+                {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": STIJL_KLEUREN[stijl]}
             )
-            voeg_muren_toe(muur_data, fase, x, y, breedte, gap, z)
+            voeg_muren_toe(muur_data, level, stijl, x, y, breedte, gap, z)
 
             if wereld_stap % CHECKPOINT_INTERVAL == 0:
                 checkpoint_posities.append((x, y + 0.7, z))
 
-            if stap == SPRONGEN_PER_FASE - 1:
+            if (level + 1) % STER_INTERVAL == 0 and stap == SPRONGEN_PER_LEVEL - 1:
                 ster_posities.append((x, y + 1.6, z))
 
             vorige_breedte = breedte
 
-        fase_eindes.append(x)
+        level_eindes.append(x)
 
     finish_x = x + vorige_breedte / 2 + 8.0
     finish_y = y + 0.3
     finish_z = z
 
-    platform_data.append({"positie": (finish_x, finish_y, finish_z), "schaal": (12.0, 1.0, 12.0), "kleur": color.gold})
+    platform_data.append(
+        {"positie": (finish_x, finish_y, finish_z), "schaal": (FINISH_PLATFORM_SCHAAL, 1.0, FINISH_PLATFORM_SCHAAL), "kleur": color.gold}
+    )
     doel_positie = Vec3(finish_x, finish_y + 2.2, finish_z)
-    return platform_data, muur_data, checkpoint_posities, ster_posities, fase_eindes, doel_positie
+    return platform_data, muur_data, checkpoint_posities, ster_posities, level_eindes, doel_positie
 
 
-PLATFORM_DATA, MUUR_DATA, CHECKPOINT_POSITIES, STER_POSITIES, FASE_EINDES, DOEL_POSITIE = bouw_baangegevens()
+PLATFORM_DATA, MUUR_DATA, CHECKPOINT_POSITIES, STER_POSITIES, LEVEL_EINDES, DOEL_POSITIE = bouw_baangegevens()
 TOTAAL_STERREN = len(STER_POSITIES)
 
 app = Ursina()
@@ -483,12 +492,19 @@ def maak_tijd_tekst(seconden):
     return f"{minuten}:{rest_seconden:02d}"
 
 
-def huidige_fase_nummer():
-    """Kijk in welk stuk van de baan je ongeveer bent."""
-    for nummer, eind_x in enumerate(FASE_EINDES, start=1):
+def huidige_level_nummer():
+    """Kijk in welk level van de baan je ongeveer bent."""
+    for nummer, eind_x in enumerate(LEVEL_EINDES, start=1):
         if player.x <= eind_x:
             return nummer
-    return AANTAL_FASES
+    return AANTAL_LEVELS
+
+
+def moeilijkheid_tekst(level_nummer):
+    """Geef een kort woord voor hoe moeilijk het nu is."""
+    stap = (level_nummer - 1) / max(1, AANTAL_LEVELS - 1)
+    index = min(len(MOEILIJKHEID_NAMEN) - 1, int(stap * len(MOEILIJKHEID_NAMEN)))
+    return MOEILIJKHEID_NAMEN[index]
 
 
 def zet_speler_terug(tekst):
@@ -524,15 +540,17 @@ def herstart_spel():
 
 
 def update_status():
-    """Werk de tekst linksboven bij met score, tijd en voortgang."""
+    """Werk de tekst linksboven bij met score, tijd en level."""
     huidig_einde = eind_tijd if eind_tijd is not None else perf_counter()
     voortgang = int(max(0, min(100, (player.x / DOEL_POSITIE.x) * 100)))
-    fase_nummer = huidige_fase_nummer()
+    level_nummer = huidige_level_nummer()
+    stijl_nummer = (level_nummer - 1) % len(STIJL_NAMEN)
     status_tekst.text = (
         f"Sterren: {gehaalde_sterren}/{TOTAAL_STERREN}\n"
         f"Tijd: {maak_tijd_tekst(huidig_einde - start_tijd)}\n"
         f"Voortgang: {voortgang}%\n"
-        f"Fase {fase_nummer}/{AANTAL_FASES}: {FASE_NAMEN[fase_nummer - 1]}"
+        f"Level {level_nummer}/{AANTAL_LEVELS}: {STIJL_NAMEN[stijl_nummer]}\n"
+        f"Moeilijkheid: {moeilijkheid_tekst(level_nummer)}"
     )
 
 
@@ -550,9 +568,9 @@ uitleg_tekst = Text(
     parent=camera.ui,
     text=(
         "Wolken Parkour 3D\n"
-        "1300 sprongen\n"
-        "Van makkelijk naar moeilijk\n"
-        "Ook langs muren springen\n"
+        "100 korte levels\n"
+        "1300 sprongen totaal\n"
+        "Steeds een nieuw stukje\n"
         "WASD + muis + spatie\n"
         "R = opnieuw"
     ),
@@ -567,7 +585,7 @@ einde_tekst = Text(parent=camera.ui, y=0.08, origin=(0, 0), scale=2.0, color=col
 
 maak_sterren_opnieuw()
 if not laad_voortgang():
-    toon_melding("Deze baan is nu 100 keer zo lang. Succes!")
+    toon_melding("Nu zijn er veel meer korte levels. Succes!")
 
 
 def input(key):
