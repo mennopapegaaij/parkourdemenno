@@ -25,7 +25,7 @@ from ursina import (
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 4
+BAAN_VERSIE = 5
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
@@ -38,6 +38,9 @@ SPRINGBLOK_STAP = 6
 SPRINGBLOK_COOLDOWN = 0.7
 MUURSPRONG_COOLDOWN = 0.35
 SPRINGBLOK_SCHAAL = (1.7, 0.35, 1.7)
+OBSTAKEL_MUUR_INTERVAL = 9
+OBSTAKEL_MUUR_START_LEVEL = 18
+OBSTAKEL_PAD_Z = 5.8
 
 STIJL_NAMEN = [
     "makkelijke start",
@@ -112,6 +115,12 @@ MOEILIJKHEID_NAMEN = [
     "superslim",
 ]
 
+HOOGTE_PATROONEN = [
+    [0.0, 0.2, 0.6, 1.0, 1.5, 2.0, 1.5, 1.0, 0.6, 0.2, 0.8, 1.4, 2.1],
+    [0.0, -0.3, -0.8, -1.2, -1.6, -1.1, -0.5, 0.1, 0.8, 1.4, 1.9, 1.2, 0.4],
+    [0.0, 0.6, 1.2, 1.8, 1.0, 0.2, -0.4, 0.4, 1.2, 2.0, 1.4, 0.8, 0.0],
+]
+
 
 def vec3_van(positie):
     """Maak van een tuple makkelijk een Vec3."""
@@ -155,6 +164,17 @@ def voeg_muren_toe(muur_data, level_nummer, stijl, x, y, breedte, gap, z):
         )
 
 
+def voeg_blokkade_muur_toe(muur_data, x, y, gap, breedte):
+    """Maak een muur midden op de route waar je langs moet springen."""
+    muur_data.append(
+        {
+            "positie": (x - breedte / 2 - gap / 2, y + 4.1, 0.0),
+            "schaal": (1.2, 8.2, 7.2),
+            "kleur": color.rgba(255, 245, 210, 190),
+        }
+    )
+
+
 def bouw_baangegevens():
     """Bouw een baan met veel korte levels die steeds moeilijker worden."""
     platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": color.azure}]
@@ -173,10 +193,14 @@ def bouw_baangegevens():
         moeilijkheid = level / max(1, AANTAL_LEVELS - 1)
         stijl = level % len(STIJL_NAMEN)
         heeft_springblok = level >= 12 and (level + 1) % SPRINGBLOK_INTERVAL == 0
+        heeft_blokkade_muur = level >= OBSTAKEL_MUUR_START_LEVEL and (level + 1) % OBSTAKEL_MUUR_INTERVAL == 0
+        blokkade_kant = OBSTAKEL_PAD_Z if (level // OBSTAKEL_MUUR_INTERVAL) % 2 == 0 else -OBSTAKEL_PAD_Z
         grote_sprong_stappen = 0
-        basis_y = level * 0.22
+        basis_y = level * 0.32 + (level // 10) * 0.35
         z_pat = STIJL_Z_PATROON[stijl]
         y_pat = STIJL_Y_PATROON[stijl]
+        hoogte_pat = HOOGTE_PATROONEN[level % len(HOOGTE_PATROONEN)]
+        hoogte_schaal = 1.0 + moeilijkheid * 1.7
         basis_breedte = BEGIN_SCHAAL[0] + (EIND_SCHAAL[0] - BEGIN_SCHAAL[0]) * moeilijkheid
         basis_diepte = BEGIN_SCHAAL[1] + (EIND_SCHAAL[1] - BEGIN_SCHAAL[1]) * moeilijkheid
 
@@ -193,16 +217,26 @@ def bouw_baangegevens():
                 extra_hoogte = 0.7 if grote_sprong_stappen == 2 else 0.35
 
             x += vorige_breedte / 2 + gap + breedte / 2
-            y = basis_y + y_pat[stap % len(y_pat)] + extra_hoogte
+            hoogte_bonus = hoogte_pat[stap % len(hoogte_pat)] * (0.25 + moeilijkheid * 0.35)
+            y = basis_y + y_pat[stap % len(y_pat)] * hoogte_schaal + hoogte_bonus + extra_hoogte
             z = z_pat[stap % len(z_pat)]
 
+            if heeft_blokkade_muur and stap in (4, 5, 6):
+                z = blokkade_kant + (0.8 if stap == 5 else 0.0)
+            elif heeft_blokkade_muur and stap in (7, 8):
+                z = blokkade_kant * 0.55
+
             if level >= 80 and stap % 11 == 5:
-                y += 0.2
+                y += 0.55
+            elif level >= 45 and stap % 9 == 4:
+                y += 0.35
 
             platform_data.append(
                 {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": STIJL_KLEUREN[stijl]}
             )
             voeg_muren_toe(muur_data, level, stijl, x, y, breedte, gap, z)
+            if heeft_blokkade_muur and stap == 4:
+                voeg_blokkade_muur_toe(muur_data, x, y, gap, breedte)
 
             if heeft_springblok and stap == SPRINGBLOK_STAP:
                 springblok_posities.append((x, y + 0.7, z))

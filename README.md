@@ -8,6 +8,8 @@ Een vrolijk maar nu ook lastig 3D parkourspel in Python met `ursina`.
 - Elk level is korter, dus je komt sneller in een nieuw stukje
 - Het spel gaat nog steeds van **makkelijk naar moeilijk**
 - De muur-sprongen zitten er nog steeds in
+- Er staan nu ook **blokkade-muren** midden in de route waar je langs moet springen
+- De baan heeft nu **veel meer hoogteverschil**
 - Er zijn nu ook **groene springblokken** voor superhoge sprongen
 - Er zijn veel meer checkpoints
 - Het spel laadt nu alleen het stuk baan dat dicht bij je is, zodat het soepeler loopt
@@ -16,6 +18,8 @@ Een vrolijk maar nu ook lastig 3D parkourspel in Python met `ursina`.
 ## Wat doe je in het spel?
 
 - Spring over een superlange wolkenbaan
+- Spring langs muren die midden in de weg staan
+- Klim en daal over stukken met veel hoogteverschil
 - Gebruik groene springblokken voor extra hoge sprongen
 - Druk op `Spatie` langs een muur voor een muursprong
 - Pak alle sterren
