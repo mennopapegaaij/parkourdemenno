@@ -1,15 +1,21 @@
 # Wolken Parkour 3D
 
-Een vrolijk 3D parkourspel in Python met `ursina`.
+Een vrolijk maar nu ook lastig 3D parkourspel in Python met `ursina`.
+
+## Wat is er nieuw?
+
+- De baan is nu ongeveer **100 keer zo lang**
+- Het spel gaat van **makkelijk naar moeilijk**
+- Je hebt nu ook stukken waar je **langs muren moet springen**
+- Er zijn veel meer checkpoints
+- Het spel slaat automatisch op waar je bent gebleven
 
 ## Wat doe je in het spel?
 
-- Spring van blok naar blok hoog in de lucht
-- Pak 3 gele sterren
-- Raak checkpoints zodat je niet helemaal opnieuw hoeft
-- Haal de vlag om te winnen
-- Val je naar beneden? Dan ga je terug naar je laatste checkpoint
-- Het spel slaat automatisch op waar je bent gebleven
+- Spring over een superlange wolkenbaan
+- Pak alle sterren
+- Haal checkpoints zodat je niet te ver terug hoeft
+- Bereik de finishvlag om te winnen
 
 ## Starten
 
