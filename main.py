@@ -479,6 +479,14 @@ def lees_getal(waarde, standaard):
         return standaard
 
 
+def lees_heel_getal(waarde, standaard):
+    """Lees een heel getal uit het opslagbestand."""
+    try:
+        return int(waarde)
+    except (TypeError, ValueError):
+        return standaard
+
+
 def veilig_speler_punt():
     """Bewaar geen plek midden in een val, maar een veilige plek."""
     if player.y < -6:
@@ -505,6 +513,8 @@ def bewaar_voortgang():
 
     verstreken_tijd = max(0.0, perf_counter() - start_tijd)
     speler_punt = veilig_speler_punt()
+    actieve_checkpoint_nummers = [nummer for nummer, checkpoint in enumerate(checkpoints) if checkpoint.actief]
+    laatste_checkpoint = actieve_checkpoint_nummers[-1] if actieve_checkpoint_nummers else -1
     opslag = {
         "baan_versie": BAAN_VERSIE,
         "speler_positie": vec3_naar_lijst(speler_punt),
@@ -513,6 +523,8 @@ def bewaar_voortgang():
         "spawn_punt": vec3_naar_lijst(spawn_punt),
         "verzamelde_sterren": sorted(verzamelde_sterren),
         "actieve_checkpoints": [checkpoint.actief for checkpoint in checkpoints],
+        "laatste_checkpoint": laatste_checkpoint,
+        "huidig_level": huidige_level_nummer(),
         "verstreken_tijd": verstreken_tijd,
     }
 
@@ -521,6 +533,33 @@ def bewaar_voortgang():
         laatste_opslag_tijd = perf_counter()
     except OSError:
         print("Opslaan lukte niet.")
+
+
+def checkpoint_nummer_uit_lijst(checkpoint_lijst):
+    """Zoek het laatste checkpoint dat al gehaald was."""
+    laatste_checkpoint = -1
+
+    for nummer, actief in enumerate(checkpoint_lijst):
+        if bool(actief):
+            laatste_checkpoint = nummer
+
+    return laatste_checkpoint
+
+
+def spawn_punt_van_checkpoint(checkpoint_nummer):
+    """Maak een veilig spawn-punt bij een checkpoint."""
+    if 0 <= checkpoint_nummer < len(checkpoints):
+        checkpoint = checkpoints[checkpoint_nummer]
+        return Vec3(checkpoint.x, checkpoint.y + 2, checkpoint.z)
+
+    return Vec3(START_PUNT.x, START_PUNT.y, START_PUNT.z)
+
+
+def zet_checkpoint_status(checkpoint_lijst):
+    """Zet checkpoints aan of uit op basis van de opslag."""
+    for nummer, checkpoint in enumerate(checkpoints):
+        checkpoint.actief = nummer < len(checkpoint_lijst) and bool(checkpoint_lijst[nummer])
+        checkpoint.color = color.lime if checkpoint.actief else color.rgb(100, 140, 255)
 
 
 def laad_voortgang():
@@ -538,11 +577,6 @@ def laad_voortgang():
         return False
     except OSError:
         print("Het opslagbestand kon niet gelezen worden. Het spel begint opnieuw.")
-        return False
-
-    if opslag.get("baan_versie") != BAAN_VERSIE:
-        wis_opslag()
-        print("Er is een nieuwe baan. Je begint opnieuw op het eerste blok.")
         return False
 
     verzamelde_lijst = opslag.get("verzamelde_sterren", [])
@@ -566,10 +600,20 @@ def laad_voortgang():
     verzamelde_sterren = nieuwe_sterren
     gehaalde_sterren = len(verzamelde_sterren)
 
-    spawn_punt = lijst_naar_vec3(opslag.get("spawn_punt"), START_PUNT)
-    speler_punt = lijst_naar_vec3(opslag.get("speler_positie"), spawn_punt)
-    if speler_punt.y < -6:
+    oude_baan = opslag.get("baan_versie") != BAAN_VERSIE
+    laatste_checkpoint = lees_heel_getal(opslag.get("laatste_checkpoint"), checkpoint_nummer_uit_lijst(checkpoint_lijst))
+    laatste_checkpoint = max(-1, min(len(checkpoints) - 1, laatste_checkpoint))
+
+    zet_checkpoint_status(checkpoint_lijst)
+    spawn_punt = spawn_punt_van_checkpoint(laatste_checkpoint)
+
+    if oude_baan:
         speler_punt = Vec3(spawn_punt.x, spawn_punt.y, spawn_punt.z)
+    else:
+        oude_spawn = lijst_naar_vec3(opslag.get("spawn_punt"), spawn_punt)
+        speler_punt = lijst_naar_vec3(opslag.get("speler_positie"), oude_spawn)
+        if speler_punt.y < -6:
+            speler_punt = Vec3(spawn_punt.x, spawn_punt.y, spawn_punt.z)
 
     player.position = speler_punt
     player.rotation_y = lees_getal(opslag.get("rotatie_y"), 0.0)
@@ -577,16 +621,17 @@ def laad_voortgang():
     player.air_time = 0
     vernieuw_actieve_baan(force=True)
 
-    for nummer, checkpoint in enumerate(checkpoints):
-        checkpoint.actief = nummer < len(checkpoint_lijst) and bool(checkpoint_lijst[nummer])
-        checkpoint.color = color.lime if checkpoint.actief else color.rgb(100, 140, 255)
-
     maak_sterren_opnieuw()
 
     verstreken_tijd = max(0.0, lees_getal(opslag.get("verstreken_tijd"), 0.0))
     start_tijd = perf_counter() - verstreken_tijd
     laatste_opslag_tijd = perf_counter()
-    toon_melding("Je vorige potje is geladen!")
+
+    if oude_baan:
+        toon_melding("Je ging verder vanaf je laatste checkpoint!")
+    else:
+        toon_melding("Je vorige potje is geladen!")
+
     return True
 
 

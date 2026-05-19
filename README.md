@@ -49,5 +49,6 @@ Het spel bewaart automatisch:
 - je sterren
 - je checkpoints
 - je tijd
+- en probeert na nieuwe baan-updates verder te gaan vanaf je checkpoint
 
 Als je later terugkomt en `python main.py` weer start, ga je verder waar je was.
