@@ -9,6 +9,7 @@ Een vrolijk 3D parkourspel in Python met `ursina`.
 - Raak checkpoints zodat je niet helemaal opnieuw hoeft
 - Haal de vlag om te winnen
 - Val je naar beneden? Dan ga je terug naar je laatste checkpoint
+- Het spel slaat automatisch op waar je bent gebleven
 
 ## Starten
 
@@ -24,3 +25,14 @@ python main.py
 - `Spatie` = springen
 - `R` = opnieuw beginnen
 - `Esc` = stoppen
+
+## Opslaan
+
+Het spel bewaart automatisch:
+
+- je plek
+- je sterren
+- je checkpoints
+- je tijd
+
+Als je later terugkomt en `python main.py` weer start, ga je verder waar je was.

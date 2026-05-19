@@ -1,6 +1,8 @@
 """Wolken Parkour 3D - een simpel 3D parkourspel."""
 
+import json
 from math import sin
+from pathlib import Path
 from time import perf_counter
 
 from ursina import (
@@ -25,6 +27,8 @@ TITEL = "Wolken Parkour 3D"
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 TOTAAL_STERREN = 3
+AUTO_OPSLAAN_TIJD = 1.0
+OPSLAG_BESTAND = Path(__file__).with_name("savegame.json")
 
 PLATFORMS = [
     {"positie": (0, 0, 0), "schaal": (6, 1, 6), "kleur": color.azure},
@@ -65,12 +69,14 @@ camera.fov = 95
 
 sterren = []
 checkpoints = []
+verzamelde_sterren = set()
 spawn_punt = Vec3(START_PUNT.x, START_PUNT.y, START_PUNT.z)
 gehaalde_sterren = 0
 gewonnen = False
 start_tijd = perf_counter()
 eind_tijd = None
 melding_tijd = 0.0
+laatste_opslag_tijd = 0.0
 
 
 def vec3_van(positie):
@@ -93,7 +99,7 @@ def maak_platform(positie, schaal, kleur_blok):
 class ZwevendeSter(Entity):
     """Een ster draait en zweeft een klein beetje op en neer."""
 
-    def __init__(self, positie):
+    def __init__(self, positie, nummer):
         super().__init__(
             model="sphere",
             color=color.yellow,
@@ -101,6 +107,7 @@ class ZwevendeSter(Entity):
             scale=0.7,
             collider="sphere",
         )
+        self.nummer = nummer
         self.basis_y = self.y
         self.fase = (self.x + self.z) * 0.12
 
@@ -166,7 +173,136 @@ def maak_sterren_opnieuw():
     for ster in sterren:
         destroy(ster)
 
-    sterren = [ZwevendeSter(positie) for positie in STER_POSITIES]
+    sterren = [
+        ZwevendeSter(positie, nummer)
+        for nummer, positie in enumerate(STER_POSITIES)
+        if nummer not in verzamelde_sterren
+    ]
+
+
+def vec3_naar_lijst(waarde):
+    """Maak van een Vec3 een gewone lijst voor het opslagbestand."""
+    return [waarde.x, waarde.y, waarde.z]
+
+
+def lijst_naar_vec3(waarde, standaard):
+    """Maak van een lijst weer een Vec3."""
+    if not isinstance(waarde, list) or len(waarde) != 3:
+        return Vec3(standaard.x, standaard.y, standaard.z)
+
+    try:
+        return Vec3(float(waarde[0]), float(waarde[1]), float(waarde[2]))
+    except (TypeError, ValueError):
+        return Vec3(standaard.x, standaard.y, standaard.z)
+
+
+def lees_getal(waarde, standaard):
+    """Lees een getal uit het opslagbestand."""
+    try:
+        return float(waarde)
+    except (TypeError, ValueError):
+        return standaard
+
+
+def veilig_speler_punt():
+    """Bewaar geen plek midden in een val, maar een veilige plek."""
+    if player.y < -6:
+        return Vec3(spawn_punt.x, spawn_punt.y, spawn_punt.z)
+    return Vec3(player.x, player.y, player.z)
+
+
+def wis_opslag():
+    """Verwijder het opslagbestand als een potje klaar is."""
+    if OPSLAG_BESTAND.exists():
+        try:
+            OPSLAG_BESTAND.unlink()
+        except OSError:
+            print("Het lukte niet om het opslagbestand weg te halen.")
+
+
+def bewaar_voortgang():
+    """Sla op waar de speler nu is."""
+    global laatste_opslag_tijd
+
+    if gewonnen:
+        wis_opslag()
+        return
+
+    verstreken_tijd = max(0.0, perf_counter() - start_tijd)
+    speler_punt = veilig_speler_punt()
+    opslag = {
+        "speler_positie": vec3_naar_lijst(speler_punt),
+        "rotatie_y": player.rotation_y,
+        "kijk_x": player.camera_pivot.rotation_x,
+        "spawn_punt": vec3_naar_lijst(spawn_punt),
+        "verzamelde_sterren": sorted(verzamelde_sterren),
+        "actieve_checkpoints": [checkpoint.actief for checkpoint in checkpoints],
+        "verstreken_tijd": verstreken_tijd,
+    }
+
+    try:
+        OPSLAG_BESTAND.write_text(json.dumps(opslag, indent=2), encoding="utf-8")
+        laatste_opslag_tijd = perf_counter()
+    except OSError:
+        print("Opslaan lukte niet.")
+
+
+def laad_voortgang():
+    """Laad het vorige potje als er een opslagbestand is."""
+    global spawn_punt, gehaalde_sterren, start_tijd, verzamelde_sterren, laatste_opslag_tijd
+
+    if not OPSLAG_BESTAND.exists():
+        return False
+
+    try:
+        opslag = json.loads(OPSLAG_BESTAND.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        print("Het opslagbestand is niet goed. Het spel begint opnieuw.")
+        return False
+    except OSError:
+        print("Het opslagbestand kon niet gelezen worden. Het spel begint opnieuw.")
+        return False
+
+    verzamelde_lijst = opslag.get("verzamelde_sterren", [])
+    checkpoint_lijst = opslag.get("actieve_checkpoints", [])
+
+    if not isinstance(verzamelde_lijst, list) or not isinstance(checkpoint_lijst, list):
+        print("Er missen dingen in het opslagbestand. Het spel begint opnieuw.")
+        return False
+
+    nieuwe_sterren = set()
+    for waarde in verzamelde_lijst:
+        try:
+            nummer = int(waarde)
+        except (TypeError, ValueError):
+            continue
+
+        if 0 <= nummer < len(STER_POSITIES):
+            nieuwe_sterren.add(nummer)
+
+    verzamelde_sterren = nieuwe_sterren
+    gehaalde_sterren = len(verzamelde_sterren)
+
+    spawn_punt = lijst_naar_vec3(opslag.get("spawn_punt"), START_PUNT)
+    speler_punt = lijst_naar_vec3(opslag.get("speler_positie"), spawn_punt)
+    if speler_punt.y < -6:
+        speler_punt = Vec3(spawn_punt.x, spawn_punt.y, spawn_punt.z)
+
+    player.position = speler_punt
+    player.rotation_y = lees_getal(opslag.get("rotatie_y"), 0.0)
+    player.camera_pivot.rotation_x = lees_getal(opslag.get("kijk_x"), 0.0)
+
+    for nummer, checkpoint in enumerate(checkpoints):
+        checkpoint.actief = nummer < len(checkpoint_lijst) and bool(checkpoint_lijst[nummer])
+        checkpoint.color = color.lime if checkpoint.actief else color.rgb(100, 140, 255)
+
+    maak_sterren_opnieuw()
+
+    verstreken_tijd = max(0.0, lees_getal(opslag.get("verstreken_tijd"), 0.0))
+    start_tijd = perf_counter() - verstreken_tijd
+    laatste_opslag_tijd = perf_counter()
+    toon_melding("Je vorige potje is geladen!")
+    return True
 
 
 def toon_melding(tekst, duur=2.0):
@@ -196,10 +332,11 @@ def zet_speler_terug(tekst):
 
 def herstart_spel():
     """Begin helemaal opnieuw vanaf het eerste blok."""
-    global spawn_punt, gehaalde_sterren, gewonnen, start_tijd, eind_tijd
+    global spawn_punt, gehaalde_sterren, gewonnen, start_tijd, eind_tijd, verzamelde_sterren
 
     spawn_punt = Vec3(START_PUNT.x, START_PUNT.y, START_PUNT.z)
     gehaalde_sterren = 0
+    verzamelde_sterren = set()
     gewonnen = False
     start_tijd = perf_counter()
     eind_tijd = None
@@ -213,6 +350,7 @@ def herstart_spel():
 
     maak_sterren_opnieuw()
     zet_speler_terug("Nieuw potje! Pak alle 3 de sterren.")
+    bewaar_voortgang()
 
 
 def update_status():
@@ -253,7 +391,8 @@ melding_tekst = Text(parent=camera.ui, y=0.38, origin=(0, 0), scale=1.8, color=c
 einde_tekst = Text(parent=camera.ui, y=0.08, origin=(0, 0), scale=2.2, color=color.yellow)
 
 maak_sterren_opnieuw()
-toon_melding("Spring van blok naar blok en pak 3 sterren!")
+if not laad_voortgang():
+    toon_melding("Spring van blok naar blok en pak 3 sterren!")
 
 
 def input(key):
@@ -278,8 +417,10 @@ def update():
         if distance(player, ster) < 1.4:
             destroy(ster)
             sterren.remove(ster)
+            verzamelde_sterren.add(ster.nummer)
             gehaalde_sterren += 1
             toon_melding(f"Goed gedaan! Ster {gehaalde_sterren} gepakt.")
+            bewaar_voortgang()
 
     for nummer, checkpoint in enumerate(checkpoints, start=1):
         if not checkpoint.actief and distance(player.position, checkpoint.position + Vec3(0, 1.2, 0)) < 1.8:
@@ -287,6 +428,7 @@ def update():
             checkpoint.color = color.lime
             spawn_punt = Vec3(checkpoint.x, checkpoint.y + 2, checkpoint.z)
             toon_melding(f"Checkpoint {nummer} gehaald!")
+            bewaar_voortgang()
 
     if not gewonnen and distance(player.position, DOEL_POSITIE) < 2.5:
         if gehaalde_sterren == TOTAAL_STERREN:
@@ -300,8 +442,12 @@ def update():
                 f"Tijd: {maak_tijd_tekst(eind_tijd - start_tijd)}\n"
                 "Druk op R voor een nieuw potje."
             )
+            wis_opslag()
         elif melding_tijd <= 0:
             toon_melding("Pak eerst alle sterren voor je naar de finish gaat!")
+
+    if not gewonnen and perf_counter() - laatste_opslag_tijd >= AUTO_OPSLAAN_TIJD:
+        bewaar_voortgang()
 
     update_status()
 
