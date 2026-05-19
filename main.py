@@ -18,13 +18,14 @@ from ursina import (
     destroy,
     distance,
     mouse,
+    raycast,
     time,
     window,
 )
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 3
+BAAN_VERSIE = 4
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
@@ -32,6 +33,11 @@ OPSLAG_BESTAND = Path(__file__).with_name("savegame.json")
 LAAD_AFSTAND_VOORUIT = 180
 LAAD_AFSTAND_ACHTERUIT = 110
 LAAD_VERNIEUW_AFSTAND = 20
+SPRINGBLOK_INTERVAL = 8
+SPRINGBLOK_STAP = 6
+SPRINGBLOK_COOLDOWN = 0.7
+MUURSPRONG_COOLDOWN = 0.35
+SPRINGBLOK_SCHAAL = (1.7, 0.35, 1.7)
 
 STIJL_NAMEN = [
     "makkelijke start",
@@ -153,6 +159,7 @@ def bouw_baangegevens():
     """Bouw een baan met veel korte levels die steeds moeilijker worden."""
     platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": color.azure}]
     muur_data = []
+    springblok_posities = []
     checkpoint_posities = []
     ster_posities = []
     level_eindes = []
@@ -165,6 +172,8 @@ def bouw_baangegevens():
     for level in range(AANTAL_LEVELS):
         moeilijkheid = level / max(1, AANTAL_LEVELS - 1)
         stijl = level % len(STIJL_NAMEN)
+        heeft_springblok = level >= 12 and (level + 1) % SPRINGBLOK_INTERVAL == 0
+        grote_sprong_stappen = 0
         basis_y = level * 0.22
         z_pat = STIJL_Z_PATROON[stijl]
         y_pat = STIJL_Y_PATROON[stijl]
@@ -177,9 +186,14 @@ def bouw_baangegevens():
             breedte = max(2.1, basis_breedte - (stap % 4) * 0.08)
             diepte = max(2.2, basis_diepte - (stap % 3) * 0.06)
             gap = BEGIN_GAP + (EIND_GAP - BEGIN_GAP) * moeilijkheid + (stap % 3) * 0.12
+            extra_hoogte = 0.0
+
+            if grote_sprong_stappen > 0:
+                gap += 1.0
+                extra_hoogte = 0.7 if grote_sprong_stappen == 2 else 0.35
 
             x += vorige_breedte / 2 + gap + breedte / 2
-            y = basis_y + y_pat[stap % len(y_pat)]
+            y = basis_y + y_pat[stap % len(y_pat)] + extra_hoogte
             z = z_pat[stap % len(z_pat)]
 
             if level >= 80 and stap % 11 == 5:
@@ -189,6 +203,12 @@ def bouw_baangegevens():
                 {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": STIJL_KLEUREN[stijl]}
             )
             voeg_muren_toe(muur_data, level, stijl, x, y, breedte, gap, z)
+
+            if heeft_springblok and stap == SPRINGBLOK_STAP:
+                springblok_posities.append((x, y + 0.7, z))
+                grote_sprong_stappen = 2
+            elif grote_sprong_stappen > 0:
+                grote_sprong_stappen -= 1
 
             if wereld_stap % CHECKPOINT_INTERVAL == 0:
                 checkpoint_posities.append((x, y + 0.7, z))
@@ -208,10 +228,10 @@ def bouw_baangegevens():
         {"positie": (finish_x, finish_y, finish_z), "schaal": (FINISH_PLATFORM_SCHAAL, 1.0, FINISH_PLATFORM_SCHAAL), "kleur": color.gold}
     )
     doel_positie = Vec3(finish_x, finish_y + 2.2, finish_z)
-    return platform_data, muur_data, checkpoint_posities, ster_posities, level_eindes, doel_positie
+    return platform_data, muur_data, springblok_posities, checkpoint_posities, ster_posities, level_eindes, doel_positie
 
 
-PLATFORM_DATA, MUUR_DATA, CHECKPOINT_POSITIES, STER_POSITIES, LEVEL_EINDES, DOEL_POSITIE = bouw_baangegevens()
+PLATFORM_DATA, MUUR_DATA, SPRINGBLOK_POSITIES, CHECKPOINT_POSITIES, STER_POSITIES, LEVEL_EINDES, DOEL_POSITIE = bouw_baangegevens()
 TOTAAL_STERREN = len(STER_POSITIES)
 
 app = Ursina()
@@ -223,6 +243,7 @@ window.fps_counter.enabled = True
 camera.fov = 95
 
 sterren = []
+springblokken = []
 checkpoints = []
 verzamelde_sterren = set()
 actieve_platforms = {}
@@ -235,11 +256,13 @@ eind_tijd = None
 melding_tijd = 0.0
 laatste_opslag_tijd = 0.0
 laatste_laad_x = None
+laatste_springblok_tijd = 0.0
+laatste_muursprong_tijd = 0.0
 
 
 def maak_platform(positie, schaal, kleur_blok):
     """Maak een springblok waar de speler op kan landen."""
-    return Entity(
+    blok = Entity(
         model="cube",
         texture="white_cube",
         color=kleur_blok,
@@ -247,11 +270,13 @@ def maak_platform(positie, schaal, kleur_blok):
         scale=schaal,
         collider="box",
     )
+    blok.is_muur = False
+    return blok
 
 
 def maak_muur(positie, schaal, kleur_blok):
     """Maak een hoge muur langs de springroute."""
-    return Entity(
+    muur = Entity(
         model="cube",
         texture="white_cube",
         color=kleur_blok,
@@ -259,6 +284,22 @@ def maak_muur(positie, schaal, kleur_blok):
         scale=schaal,
         collider="box",
     )
+    muur.is_muur = True
+    return muur
+
+
+def maak_springblok(positie):
+    """Maak een groen blok dat je extra ver omhoog schiet."""
+    blok = Entity(
+        model="cube",
+        texture="white_cube",
+        color=color.rgb(80, 255, 120),
+        position=vec3_van(positie),
+        scale=SPRINGBLOK_SCHAAL,
+        collider="box",
+    )
+    blok.is_muur = False
+    return blok
 
 
 def vernieuw_actieve_lijst(bron_data, actieve_lijst, maker, minimum_x, maximum_x):
@@ -354,6 +395,9 @@ def maak_wereld():
         )
         checkpoint.actief = False
         checkpoints.append(checkpoint)
+
+    for positie in SPRINGBLOK_POSITIES:
+        springblokken.append(maak_springblok(positie))
 
     # Deze vlag laat zien waar het einde van de baan is.
     Entity(model="cube", position=(DOEL_POSITIE.x, DOEL_POSITIE.y + 1.0, DOEL_POSITIE.z), scale=(0.25, 7, 0.25), color=color.white)
@@ -520,6 +564,62 @@ def toon_melding(tekst, duur=2.4):
     melding_tijd = duur
 
 
+def gebruik_springblok():
+    """Schiet de speler omhoog en vooruit vanaf een groen blok."""
+    global laatste_springblok_tijd
+
+    speler_hoogte = player.position + Vec3(0, 1.0, 0)
+    nu = perf_counter()
+
+    if nu - laatste_springblok_tijd < SPRINGBLOK_COOLDOWN or not player.grounded:
+        return
+
+    for springblok in springblokken:
+        if distance(speler_hoogte, springblok.position) < 1.4:
+            player.position = player.position + Vec3(5.0, 4.2, 0)
+            player.air_time = 0
+            laatste_springblok_tijd = nu
+            vernieuw_actieve_baan(force=True)
+            toon_melding("Boing! Super sprong!")
+            return
+
+
+def vind_muursprong():
+    """Kijk of er vlak naast de speler een muur zit voor een muursprong."""
+    startpunt = player.position + Vec3(0, 1.1, 0)
+    richtingen = [
+        (Vec3(0, 0, 1), Vec3(2.7, 2.3, -2.6)),
+        (Vec3(0, 0, -1), Vec3(2.7, 2.3, 2.6)),
+    ]
+
+    for richting, sprong in richtingen:
+        raak = raycast(startpunt, richting, distance=1.3, ignore=(player,))
+        if raak.hit and getattr(raak.entity, "is_muur", False):
+            return sprong
+
+    return None
+
+
+def doe_muursprong():
+    """Spring van een muur af als je in de lucht bent en op spatie drukt."""
+    global laatste_muursprong_tijd
+
+    nu = perf_counter()
+    if player.grounded or nu - laatste_muursprong_tijd < MUURSPRONG_COOLDOWN:
+        return False
+
+    sprong = vind_muursprong()
+    if sprong is None:
+        return False
+
+    player.position = player.position + sprong
+    player.air_time = 0
+    laatste_muursprong_tijd = nu
+    vernieuw_actieve_baan(force=True)
+    toon_melding("Muursprong!")
+    return True
+
+
 def maak_tijd_tekst(seconden):
     """Zet seconden om naar minuten en seconden."""
     hele_seconden = int(seconden)
@@ -608,6 +708,8 @@ uitleg_tekst = Text(
         "Wolken Parkour 3D\n"
         "100 korte levels\n"
         "1300 sprongen totaal\n"
+        "Groen blok = super sprong\n"
+        "Spatie langs muur = muursprong\n"
         "Steeds een nieuw stukje\n"
         "WASD + muis + spatie\n"
         "R = opnieuw"
@@ -630,6 +732,8 @@ def input(key):
     """Luister naar toetsen die iets speciaals moeten doen."""
     if key == "r":
         herstart_spel()
+    elif key == "space":
+        doe_muursprong()
 
 
 def update():
@@ -637,6 +741,7 @@ def update():
     global gehaalde_sterren, spawn_punt, gewonnen, eind_tijd, melding_tijd
 
     vernieuw_actieve_baan()
+    gebruik_springblok()
 
     if melding_tijd > 0:
         melding_tijd -= time.dt
