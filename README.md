@@ -9,6 +9,7 @@ Een vrolijk maar nu ook lastig 3D parkourspel in Python met `ursina`.
 - Het spel gaat nog steeds van **makkelijk naar moeilijk**
 - De muur-sprongen zitten er nog steeds in
 - Er zijn veel meer checkpoints
+- Het spel laadt nu alleen het stuk baan dat dicht bij je is, zodat het soepeler loopt
 - Het spel slaat automatisch op waar je bent gebleven
 
 ## Wat doe je in het spel?

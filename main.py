@@ -29,6 +29,9 @@ START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
 OPSLAG_BESTAND = Path(__file__).with_name("savegame.json")
+LAAD_AFSTAND_VOORUIT = 180
+LAAD_AFSTAND_ACHTERUIT = 110
+LAAD_VERNIEUW_AFSTAND = 20
 
 STIJL_NAMEN = [
     "makkelijke start",
@@ -222,6 +225,8 @@ camera.fov = 95
 sterren = []
 checkpoints = []
 verzamelde_sterren = set()
+actieve_platforms = {}
+actieve_muren = {}
 spawn_punt = Vec3(START_PUNT.x, START_PUNT.y, START_PUNT.z)
 gehaalde_sterren = 0
 gewonnen = False
@@ -229,6 +234,7 @@ start_tijd = perf_counter()
 eind_tijd = None
 melding_tijd = 0.0
 laatste_opslag_tijd = 0.0
+laatste_laad_x = None
 
 
 def maak_platform(positie, schaal, kleur_blok):
@@ -253,6 +259,41 @@ def maak_muur(positie, schaal, kleur_blok):
         scale=schaal,
         collider="box",
     )
+
+
+def vernieuw_actieve_lijst(bron_data, actieve_lijst, maker, minimum_x, maximum_x):
+    """Houd alleen de blokken actief die dicht bij de speler zijn."""
+    gewenste_indexen = set()
+
+    for index, data in enumerate(bron_data):
+        positie_x = data["positie"][0]
+        halve_breedte = data["schaal"][0] / 2
+
+        if positie_x + halve_breedte < minimum_x or positie_x - halve_breedte > maximum_x:
+            continue
+
+        gewenste_indexen.add(index)
+        if index not in actieve_lijst:
+            actieve_lijst[index] = maker(data["positie"], data["schaal"], data["kleur"])
+
+    for index in list(actieve_lijst):
+        if index not in gewenste_indexen:
+            destroy(actieve_lijst.pop(index))
+
+
+def vernieuw_actieve_baan(force=False):
+    """Laad alleen het stukje baan dat om de speler heen zit."""
+    global laatste_laad_x
+
+    if not force and laatste_laad_x is not None:
+        if abs(player.x - laatste_laad_x) < LAAD_VERNIEUW_AFSTAND:
+            return
+
+    minimum_x = player.x - LAAD_AFSTAND_ACHTERUIT
+    maximum_x = player.x + LAAD_AFSTAND_VOORUIT
+    vernieuw_actieve_lijst(PLATFORM_DATA, actieve_platforms, maak_platform, minimum_x, maximum_x)
+    vernieuw_actieve_lijst(MUUR_DATA, actieve_muren, maak_muur, minimum_x, maximum_x)
+    laatste_laad_x = player.x
 
 
 class ZwevendeSter(Entity):
@@ -301,12 +342,6 @@ def maak_wereld():
         scale=DOEL_POSITIE.x * 2.4,
         color=color.red.tint(-0.15),
     )
-
-    for blok in PLATFORM_DATA:
-        maak_platform(blok["positie"], blok["schaal"], blok["kleur"])
-
-    for muur in MUUR_DATA:
-        maak_muur(muur["positie"], muur["schaal"], muur["kleur"])
 
     for positie in CHECKPOINT_POSITIES:
         checkpoint = Entity(
@@ -462,6 +497,7 @@ def laad_voortgang():
     player.rotation_y = lees_getal(opslag.get("rotatie_y"), 0.0)
     player.camera_pivot.rotation_x = lees_getal(opslag.get("kijk_x"), 0.0)
     player.air_time = 0
+    vernieuw_actieve_baan(force=True)
 
     for nummer, checkpoint in enumerate(checkpoints):
         checkpoint.actief = nummer < len(checkpoint_lijst) and bool(checkpoint_lijst[nummer])
@@ -513,6 +549,7 @@ def zet_speler_terug(tekst):
     player.rotation_y = 0
     player.camera_pivot.rotation_x = 0
     player.air_time = 0
+    vernieuw_actieve_baan(force=True)
     toon_melding(tekst)
 
 
@@ -563,6 +600,7 @@ player.jump_height = 2.25
 player.jump_up_duration = 0.35
 player.gravity = 1
 player.cursor.color = color.black
+vernieuw_actieve_baan(force=True)
 
 uitleg_tekst = Text(
     parent=camera.ui,
@@ -597,6 +635,8 @@ def input(key):
 def update():
     """Deze functie draait steeds opnieuw terwijl het spel loopt."""
     global gehaalde_sterren, spawn_punt, gewonnen, eind_tijd, melding_tijd
+
+    vernieuw_actieve_baan()
 
     if melding_tijd > 0:
         melding_tijd -= time.dt
