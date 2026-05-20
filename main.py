@@ -25,7 +25,7 @@ from ursina import (
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 6
+BAAN_VERSIE = 7
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
@@ -129,9 +129,10 @@ LEVEL_BIJVOEGLIJK = [
 ]
 
 HOOGTE_PATROONEN = [
-    [0.0, 0.2, 0.6, 1.0, 1.5, 2.0, 1.5, 1.0, 0.6, 0.2, 0.8, 1.4, 2.1],
-    [0.0, -0.3, -0.8, -1.2, -1.6, -1.1, -0.5, 0.1, 0.8, 1.4, 1.9, 1.2, 0.4],
-    [0.0, 0.6, 1.2, 1.8, 1.0, 0.2, -0.4, 0.4, 1.2, 2.0, 1.4, 0.8, 0.0],
+    [0.0, 0.6, 1.5, 2.6, 3.8, 5.0, 4.0, 2.8, 1.6, 0.6, 1.8, 3.4, 5.3],
+    [0.0, -0.8, -1.8, -3.0, -4.3, -3.1, -1.5, 0.3, 1.8, 3.2, 4.8, 3.0, 1.0],
+    [0.0, 1.0, 2.3, 3.8, 2.2, 0.3, -1.0, 0.6, 2.6, 4.5, 3.0, 1.2, 0.0],
+    [0.0, 1.5, 3.2, 5.0, 3.0, 0.8, -1.2, 1.1, 3.8, 6.0, 4.1, 1.9, 0.0],
 ]
 
 
@@ -205,8 +206,8 @@ def maak_level_profiel(level, moeilijkheid):
     spiegel = variant % 2 == 1
     z_schaal = 0.82 + moeilijkheid * 0.55 + (variant % 4) * 0.08
     mix_schaal = 0.18 + (variant % 3) * 0.06
-    y_schaal = 1.0 + moeilijkheid * 1.7 + (variant % 3) * 0.18
-    hoogte_schaal = 0.22 + moeilijkheid * 0.38 + (variant % 4) * 0.06
+    y_schaal = 1.35 + moeilijkheid * 2.45 + (variant % 3) * 0.3
+    hoogte_schaal = 0.5 + moeilijkheid * 0.85 + (variant % 4) * 0.14
 
     z_pat = []
     y_pat = []
@@ -223,7 +224,9 @@ def maak_level_profiel(level, moeilijkheid):
         y_waarde = y_basis[(stap + draai_y) % len(y_basis)] * y_schaal
         hoogte_waarde = hoogte_basis[(stap + draai_hoogte) % len(hoogte_basis)] * hoogte_schaal
         if variant % 3 == 2 and stap in (2, 6, 10):
-            hoogte_waarde += 0.35 + moeilijkheid * 0.45
+            hoogte_waarde += 0.8 + moeilijkheid * 0.9
+        if variant % 4 == 1 and stap in (4, 8, 11):
+            hoogte_waarde -= 0.7 + moeilijkheid * 0.8
         y_pat.append(round(y_waarde + hoogte_waarde, 2))
 
     level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} {STIJL_NAMEN[basis_stijl]}"
@@ -253,7 +256,7 @@ def bouw_baangegevens():
         heeft_blokkade_muur = level >= OBSTAKEL_MUUR_START_LEVEL and (level + 1) % OBSTAKEL_MUUR_INTERVAL == 0
         blokkade_kant = OBSTAKEL_PAD_Z if (level // OBSTAKEL_MUUR_INTERVAL) % 2 == 0 else -OBSTAKEL_PAD_Z
         grote_sprong_stappen = 0
-        basis_y = level * 0.32 + (level // 10) * 0.35
+        basis_y = level * 0.52 + (level // 8) * 0.7
         basis_breedte = BEGIN_SCHAAL[0] + (EIND_SCHAAL[0] - BEGIN_SCHAAL[0]) * moeilijkheid
         basis_diepte = BEGIN_SCHAAL[1] + (EIND_SCHAAL[1] - BEGIN_SCHAAL[1]) * moeilijkheid
 
@@ -279,9 +282,11 @@ def bouw_baangegevens():
                 z = blokkade_kant * 0.55
 
             if level >= 80 and stap % 11 == 5:
-                y += 0.55
+                y += 1.4
             elif level >= 45 and stap % 9 == 4:
-                y += 0.35
+                y += 0.9
+            elif level >= 20 and stap % 7 == 3:
+                y += 0.45
 
             platform_data.append(
                 {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": level_kleur}
