@@ -25,7 +25,7 @@ from ursina import (
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 5
+BAAN_VERSIE = 6
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
@@ -115,6 +115,19 @@ MOEILIJKHEID_NAMEN = [
     "superslim",
 ]
 
+LEVEL_BIJVOEGLIJK = [
+    "draaiende",
+    "slimme",
+    "wilde",
+    "zwevende",
+    "steile",
+    "bochtige",
+    "springende",
+    "hoge",
+    "smalle",
+    "gekke",
+]
+
 HOOGTE_PATROONEN = [
     [0.0, 0.2, 0.6, 1.0, 1.5, 2.0, 1.5, 1.0, 0.6, 0.2, 0.8, 1.4, 2.1],
     [0.0, -0.3, -0.8, -1.2, -1.6, -1.1, -0.5, 0.1, 0.8, 1.4, 1.9, 1.2, 0.4],
@@ -175,6 +188,49 @@ def voeg_blokkade_muur_toe(muur_data, x, y, gap, breedte):
     )
 
 
+def maak_level_profiel(level, moeilijkheid):
+    """Maak voor elk level een eigen patroon, zodat het niet steeds herhaalt."""
+    basis_stijl = level % len(STIJL_NAMEN)
+    variant = level // len(STIJL_NAMEN)
+    z_basis = STIJL_Z_PATROON[basis_stijl]
+    z_mix = STIJL_Z_PATROON[(basis_stijl + variant + 3) % len(STIJL_Z_PATROON)]
+    y_basis = STIJL_Y_PATROON[(basis_stijl + variant * 2) % len(STIJL_Y_PATROON)]
+    hoogte_basis = HOOGTE_PATROONEN[(level + variant) % len(HOOGTE_PATROONEN)]
+
+    draai_z = (level * 3 + variant) % len(z_basis)
+    draai_mix = (level + variant * 2) % len(z_mix)
+    draai_y = (level * 2 + variant) % len(y_basis)
+    draai_hoogte = (level + basis_stijl) % len(hoogte_basis)
+
+    spiegel = variant % 2 == 1
+    z_schaal = 0.82 + moeilijkheid * 0.55 + (variant % 4) * 0.08
+    mix_schaal = 0.18 + (variant % 3) * 0.06
+    y_schaal = 1.0 + moeilijkheid * 1.7 + (variant % 3) * 0.18
+    hoogte_schaal = 0.22 + moeilijkheid * 0.38 + (variant % 4) * 0.06
+
+    z_pat = []
+    y_pat = []
+
+    for stap in range(SPRONGEN_PER_LEVEL):
+        z_waarde = z_basis[(stap + draai_z) % len(z_basis)] * z_schaal
+        mix_waarde = z_mix[(stap + draai_mix) % len(z_mix)] * mix_schaal
+        if spiegel:
+            z_waarde = -z_waarde
+        if (stap + level) % 4 == 0:
+            mix_waarde *= -1
+        z_pat.append(round(z_waarde + mix_waarde, 2))
+
+        y_waarde = y_basis[(stap + draai_y) % len(y_basis)] * y_schaal
+        hoogte_waarde = hoogte_basis[(stap + draai_hoogte) % len(hoogte_basis)] * hoogte_schaal
+        if variant % 3 == 2 and stap in (2, 6, 10):
+            hoogte_waarde += 0.35 + moeilijkheid * 0.45
+        y_pat.append(round(y_waarde + hoogte_waarde, 2))
+
+    level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} {STIJL_NAMEN[basis_stijl]}"
+    level_kleur = STIJL_KLEUREN[(basis_stijl + variant) % len(STIJL_KLEUREN)]
+    return basis_stijl, level_kleur, z_pat, y_pat, level_naam
+
+
 def bouw_baangegevens():
     """Bouw een baan met veel korte levels die steeds moeilijker worden."""
     platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": color.azure}]
@@ -183,6 +239,7 @@ def bouw_baangegevens():
     checkpoint_posities = []
     ster_posities = []
     level_eindes = []
+    level_namen = []
 
     x = 0.0
     y = 0.0
@@ -191,16 +248,12 @@ def bouw_baangegevens():
 
     for level in range(AANTAL_LEVELS):
         moeilijkheid = level / max(1, AANTAL_LEVELS - 1)
-        stijl = level % len(STIJL_NAMEN)
+        stijl, level_kleur, z_pat, y_pat, level_naam = maak_level_profiel(level, moeilijkheid)
         heeft_springblok = level >= 12 and (level + 1) % SPRINGBLOK_INTERVAL == 0
         heeft_blokkade_muur = level >= OBSTAKEL_MUUR_START_LEVEL and (level + 1) % OBSTAKEL_MUUR_INTERVAL == 0
         blokkade_kant = OBSTAKEL_PAD_Z if (level // OBSTAKEL_MUUR_INTERVAL) % 2 == 0 else -OBSTAKEL_PAD_Z
         grote_sprong_stappen = 0
         basis_y = level * 0.32 + (level // 10) * 0.35
-        z_pat = STIJL_Z_PATROON[stijl]
-        y_pat = STIJL_Y_PATROON[stijl]
-        hoogte_pat = HOOGTE_PATROONEN[level % len(HOOGTE_PATROONEN)]
-        hoogte_schaal = 1.0 + moeilijkheid * 1.7
         basis_breedte = BEGIN_SCHAAL[0] + (EIND_SCHAAL[0] - BEGIN_SCHAAL[0]) * moeilijkheid
         basis_diepte = BEGIN_SCHAAL[1] + (EIND_SCHAAL[1] - BEGIN_SCHAAL[1]) * moeilijkheid
 
@@ -217,8 +270,7 @@ def bouw_baangegevens():
                 extra_hoogte = 0.7 if grote_sprong_stappen == 2 else 0.35
 
             x += vorige_breedte / 2 + gap + breedte / 2
-            hoogte_bonus = hoogte_pat[stap % len(hoogte_pat)] * (0.25 + moeilijkheid * 0.35)
-            y = basis_y + y_pat[stap % len(y_pat)] * hoogte_schaal + hoogte_bonus + extra_hoogte
+            y = basis_y + y_pat[stap % len(y_pat)] + extra_hoogte
             z = z_pat[stap % len(z_pat)]
 
             if heeft_blokkade_muur and stap in (4, 5, 6):
@@ -232,7 +284,7 @@ def bouw_baangegevens():
                 y += 0.35
 
             platform_data.append(
-                {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": STIJL_KLEUREN[stijl]}
+                {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": level_kleur}
             )
             voeg_muren_toe(muur_data, level, stijl, x, y, breedte, gap, z)
             if heeft_blokkade_muur and stap == 4:
@@ -253,6 +305,7 @@ def bouw_baangegevens():
             vorige_breedte = breedte
 
         level_eindes.append(x)
+        level_namen.append(level_naam)
 
     finish_x = x + vorige_breedte / 2 + 8.0
     finish_y = y + 0.3
@@ -262,10 +315,10 @@ def bouw_baangegevens():
         {"positie": (finish_x, finish_y, finish_z), "schaal": (FINISH_PLATFORM_SCHAAL, 1.0, FINISH_PLATFORM_SCHAAL), "kleur": color.gold}
     )
     doel_positie = Vec3(finish_x, finish_y + 2.2, finish_z)
-    return platform_data, muur_data, springblok_posities, checkpoint_posities, ster_posities, level_eindes, doel_positie
+    return platform_data, muur_data, springblok_posities, checkpoint_posities, ster_posities, level_eindes, level_namen, doel_positie
 
 
-PLATFORM_DATA, MUUR_DATA, SPRINGBLOK_POSITIES, CHECKPOINT_POSITIES, STER_POSITIES, LEVEL_EINDES, DOEL_POSITIE = bouw_baangegevens()
+PLATFORM_DATA, MUUR_DATA, SPRINGBLOK_POSITIES, CHECKPOINT_POSITIES, STER_POSITIES, LEVEL_EINDES, LEVEL_NAMEN, DOEL_POSITIE = bouw_baangegevens()
 TOTAAL_STERREN = len(STER_POSITIES)
 
 app = Ursina()
@@ -760,12 +813,11 @@ def update_status():
     huidig_einde = eind_tijd if eind_tijd is not None else perf_counter()
     voortgang = int(max(0, min(100, (player.x / DOEL_POSITIE.x) * 100)))
     level_nummer = huidige_level_nummer()
-    stijl_nummer = (level_nummer - 1) % len(STIJL_NAMEN)
     status_tekst.text = (
         f"Sterren: {gehaalde_sterren}/{TOTAAL_STERREN}\n"
         f"Tijd: {maak_tijd_tekst(huidig_einde - start_tijd)}\n"
         f"Voortgang: {voortgang}%\n"
-        f"Level {level_nummer}/{AANTAL_LEVELS}: {STIJL_NAMEN[stijl_nummer]}\n"
+        f"Level {level_nummer}/{AANTAL_LEVELS}: {LEVEL_NAMEN[level_nummer - 1]}\n"
         f"Moeilijkheid: {moeilijkheid_tekst(level_nummer)}"
     )
 
