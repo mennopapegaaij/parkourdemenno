@@ -46,6 +46,7 @@ LADDER_STAP = 5
 BOOSTPAD_STAP = 4
 BOOSTPAD_COOLDOWN = 0.8
 BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
+PARCOURS_VOLGORDE = ["springblok", "boost", "ladder", "spiraal", "blokkade", "muurpad"]
 
 STIJL_NAMEN = [
     "makkelijke start",
@@ -194,17 +195,22 @@ def voeg_blokkade_muur_toe(muur_data, x, y, gap, breedte):
     )
 
 
+def voeg_muurpad_toe(muur_data, x, y, breedte, gap, kant):
+    """Maak een lange zijmuur waar je langs moet springen."""
+    muur_data.append(
+        {
+            "positie": (x, y + 3.7, kant),
+            "schaal": (breedte + gap + 2.3, 7.4, 1.1),
+            "kleur": color.rgba(220, 240, 255, 185),
+        }
+    )
+
+
 def kies_parcours_soort(level):
     """Kies welke speciale soort parcours dit level krijgt."""
-    if level >= 12 and (level + 1) % 15 == 0:
-        return "spiraal"
-    if level >= 10 and (level + 1) % 13 == 0:
-        return "ladder"
-    if level >= 8 and (level + 1) % 11 == 0:
-        return "boost"
-    if level >= OBSTAKEL_MUUR_START_LEVEL and (level + 1) % OBSTAKEL_MUUR_INTERVAL == 0:
-        return "blokkade"
-    return "standaard"
+    if level < 4:
+        return "springblok"
+    return PARCOURS_VOLGORDE[(level - 4) % len(PARCOURS_VOLGORDE)]
 
 
 def maak_level_profiel(level, moeilijkheid):
@@ -274,6 +280,16 @@ def maak_level_profiel(level, moeilijkheid):
     elif parcours_soort == "blokkade":
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} muurroute"
         level_kleur = color.rgb(255, 225, 150)
+    elif parcours_soort == "springblok":
+        level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} springblokbaan"
+        level_kleur = color.rgb(120, 255, 150)
+    elif parcours_soort == "muurpad":
+        z_pat = [4.6, 5.0, 5.4, 5.8, 5.8, 5.4, 5.0, 4.6, 4.2, 4.6, 5.0, 5.4, 5.8]
+        if variant % 2 == 1:
+            z_pat = [-waarde for waarde in z_pat]
+        y_pat = [round(waarde * (0.85 + moeilijkheid * 0.4), 2) for waarde in y_pat]
+        level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} muurpad"
+        level_kleur = color.rgb(170, 220, 255)
 
     return basis_stijl, level_kleur, z_pat, y_pat, level_naam, parcours_soort
 
@@ -298,10 +314,11 @@ def bouw_baangegevens():
     for level in range(AANTAL_LEVELS):
         moeilijkheid = level / max(1, AANTAL_LEVELS - 1)
         stijl, level_kleur, z_pat, y_pat, level_naam, parcours_soort = maak_level_profiel(level, moeilijkheid)
-        heeft_springblok = level >= 12 and (level + 1) % SPRINGBLOK_INTERVAL == 0
+        heeft_springblok = parcours_soort in ("springblok", "spiraal")
         heeft_blokkade_muur = parcours_soort == "blokkade"
         heeft_ladder = parcours_soort == "ladder"
         heeft_boostpad = parcours_soort == "boost"
+        heeft_muurpad = parcours_soort == "muurpad"
         blokkade_kant = OBSTAKEL_PAD_Z if (level // OBSTAKEL_MUUR_INTERVAL) % 2 == 0 else -OBSTAKEL_PAD_Z
         grote_sprong_stappen = 0
         basis_y = level * 0.52 + (level // 8) * 0.7
@@ -325,6 +342,8 @@ def bouw_baangegevens():
                 gap += 1.0
             if heeft_ladder and stap >= LADDER_STAP:
                 gap *= 0.82
+            if heeft_muurpad and stap >= 3:
+                gap *= 0.92
 
             x += vorige_breedte / 2 + gap + breedte / 2
             y = basis_y + y_pat[stap % len(y_pat)] + extra_hoogte
@@ -348,6 +367,9 @@ def bouw_baangegevens():
             voeg_muren_toe(muur_data, level, stijl, x, y, breedte, gap, z)
             if heeft_blokkade_muur and stap == 4:
                 voeg_blokkade_muur_toe(muur_data, x, y, gap, breedte)
+            if heeft_muurpad and stap in (4, 7, 10):
+                kant = 7.0 if z >= 0 else -7.0
+                voeg_muurpad_toe(muur_data, x, y, breedte, gap, kant)
             if heeft_ladder and stap == LADDER_STAP and vorige_positie_in_level is not None:
                 vorige_x, vorige_y, vorige_z = vorige_positie_in_level
                 ladder_hoogte = max(4.6, abs(y - vorige_y) + 3.4)

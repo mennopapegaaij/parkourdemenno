@@ -7,6 +7,7 @@ Een vrolijk maar nu ook lastig 3D parkourspel in Python met `ursina`.
 - De baan heeft nu **veel meer korte levels**
 - Elk level is korter, dus je komt sneller in een nieuw stukje
 - De levels **herhalen niet steeds opnieuw**
+- Elk level heeft nu **sowieso een speciaal ding**
 - Het spel gaat nog steeds van **makkelijk naar moeilijk**
 - Er zijn nu meerdere soorten parcours, zoals **rondjes omhoog**, **ladders** en **snelheidsbanen**
 - De muur-sprongen zitten er nog steeds in
