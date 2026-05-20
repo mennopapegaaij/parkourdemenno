@@ -832,8 +832,8 @@ maak_wereld()
 # De speler kijkt in first person, alsof je zelf in het spel staat.
 player = FirstPersonController(position=START_PUNT)
 player.speed = START_SNELHEID
-player.jump_height = 2.25
-player.jump_up_duration = 0.35
+player.jump_height = 2.8
+player.jump_up_duration = 0.42
 player.gravity = 1
 player.cursor.color = color.black
 vernieuw_actieve_baan(force=True)
