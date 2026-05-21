@@ -24,6 +24,7 @@ from ursina import (
     window,
 )
 from ursina.prefabs.first_person_controller import FirstPersonController
+from ursina.shaders import unlit_shader
 
 TITEL = "Wolken Parkour 3D"
 BAAN_VERSIE = 9
@@ -191,7 +192,7 @@ def kleur_van_level(level_nummer, helderheid=1.0, alpha=255):
 def voeg_muren_toe(muur_data, level_nummer, stijl, x, y, breedte, gap, z):
     """Maak muurstukken voor de levels waar je langs muren moet springen."""
     muur_lengte = breedte + gap + 2.5
-    muur_kleur = kleur_van_level(level_nummer, 0.72, 200)
+    muur_kleur = kleur_van_level(level_nummer, 0.62)
     buiten = normaliseer_richting(x, z)
     zijkant = Vec3(-buiten.z, 0, buiten.x)
     muur_afstand = 3.6 + min(2.4, gap)
@@ -261,7 +262,7 @@ def voeg_blokkade_muur_toe(muur_data, vorige_punt, huidig_punt, level_nummer):
         {
             "positie": (midden_x, midden_y + 4.1, midden_z),
             "schaal": (3.5, 8.2, 3.5),
-            "kleur": kleur_van_level(level_nummer, 0.8, 205),
+            "kleur": kleur_van_level(level_nummer, 0.7),
         }
     )
 
@@ -273,7 +274,7 @@ def voeg_muurpad_toe(muur_data, x, y, z, level_nummer):
         {
             "positie": (x + buiten.x * 3.4, y + 3.7, z + buiten.z * 3.4),
             "schaal": (3.0, 7.4, 3.0),
-            "kleur": kleur_van_level(level_nummer, 0.76, 195),
+            "kleur": kleur_van_level(level_nummer, 0.66),
         }
     )
 
@@ -550,6 +551,7 @@ def maak_platform(positie, schaal, kleur_blok):
     blok = Entity(
         model="cube",
         texture="white_cube",
+        shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
         scale=schaal,
@@ -564,6 +566,7 @@ def maak_muur(positie, schaal, kleur_blok):
     muur = Entity(
         model="cube",
         texture="white_cube",
+        shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
         scale=schaal,
@@ -578,6 +581,7 @@ def maak_springblok(positie, kleur_blok):
     blok = Entity(
         model="cube",
         texture="white_cube",
+        shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
         scale=SPRINGBLOK_SCHAAL,
@@ -592,6 +596,7 @@ def maak_ladder(positie, schaal, kleur_blok):
     ladder = Entity(
         model="cube",
         texture="white_cube",
+        shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
         scale=schaal,
@@ -606,6 +611,7 @@ def maak_boostpad(positie, kleur_blok):
     pad = Entity(
         model="cube",
         texture="white_cube",
+        shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
         scale=BOOSTPAD_SCHAAL,
@@ -656,6 +662,7 @@ class ZwevendeSter(Entity):
     def __init__(self, positie, nummer):
         super().__init__(
             model="sphere",
+            shader=unlit_shader,
             color=color.yellow,
             position=vec3_van(positie),
             scale=0.8,
@@ -677,11 +684,11 @@ def maak_wolken():
     while voor_hoogte <= DOEL_POSITIE.y + 40:
         straal = TOREN_STRAAL + 18 + (int(voor_hoogte / 20) % 3) * 4
         wolk_level = level_nummer_bij_hoogte(voor_hoogte) - 1
-        wolk_kleur = kleur_van_level(wolk_level, 1.08, 170)
+        wolk_kleur = kleur_van_level(wolk_level, 0.9, 235)
         for hoek in (0, 90, 180, 270):
             x = round(cos(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
             z = round(sin(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
-            Entity(model="sphere", color=wolk_kleur, position=(x, voor_hoogte, z), scale=(11, 4, 7))
+            Entity(model="sphere", shader=unlit_shader, color=wolk_kleur, position=(x, voor_hoogte, z), scale=(11, 4, 7))
         voor_hoogte += 22
 
 
@@ -703,6 +710,7 @@ def maak_wereld():
         checkpoint = Entity(
             model="cube",
             texture="white_cube",
+            shader=unlit_shader,
             color=checkpoint_info["kleur"],
             position=vec3_van(checkpoint_info["positie"]),
             scale=(2.8, 0.3, 2.8),
@@ -726,17 +734,19 @@ def maak_wereld():
     # Deze vlag laat zien waar het einde van de toren is.
     Entity(
         model="cube",
+        shader=unlit_shader,
         position=(DOEL_POSITIE.x, DOEL_POSITIE.y + 1.0, DOEL_POSITIE.z),
         scale=(0.25, 7, 0.25),
         color=kleur_van_level(AANTAL_LEVELS - 1, 0.78),
     )
     Entity(
         model="cube",
+        shader=unlit_shader,
         position=(DOEL_POSITIE.x + 1.1, DOEL_POSITIE.y + 3.6, DOEL_POSITIE.z),
         scale=(2.4, 1.4, 0.15),
         color=kleur_van_level(AANTAL_LEVELS - 1, 1.25),
     )
-    Entity(model="sphere", position=DOEL_POSITIE, scale=1.7, color=kleur_van_level(AANTAL_LEVELS - 1, 1.35))
+    Entity(model="sphere", shader=unlit_shader, position=DOEL_POSITIE, scale=1.7, color=kleur_van_level(AANTAL_LEVELS - 1, 1.35))
 
     maak_wolken()
 
