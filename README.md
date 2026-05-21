@@ -1,10 +1,11 @@
 # Wolken Parkour 3D
 
-Een vrolijk maar nu ook lastig 3D parkourspel in Python met `ursina`.
+Een vrolijke 3D parkourtoren in Python met `ursina`.
 
 ## Wat is er nieuw?
 
 - De baan heeft nu **veel meer korte levels**
+- De levels vormen nu samen een **grote toren omhoog**
 - Elk level is korter, dus je komt sneller in een nieuw stukje
 - De levels **herhalen niet steeds opnieuw**
 - Elk level heeft nu **sowieso een speciaal ding**
@@ -20,7 +21,7 @@ Een vrolijk maar nu ook lastig 3D parkourspel in Python met `ursina`.
 
 ## Wat doe je in het spel?
 
-- Spring over een superlange wolkenbaan
+- Klim een superhoge parkourtoren op
 - Speel ook rondjes omhoog, ladder-klimmen en snelheidsstukken
 - Spring langs muren die midden in de weg staan
 - Klim en daal over stukken met heel grote hoogteverschillen

@@ -1,7 +1,7 @@
 """Wolken Parkour 3D - een lang 3D parkourspel."""
 
 import json
-from math import sin
+from math import cos, radians, sin
 from pathlib import Path
 from time import perf_counter
 
@@ -26,14 +26,14 @@ from ursina import (
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 8
+BAAN_VERSIE = 9
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
 OPSLAG_BESTAND = Path(__file__).with_name("savegame.json")
-LAAD_AFSTAND_VOORUIT = 180
-LAAD_AFSTAND_ACHTERUIT = 110
-LAAD_VERNIEUW_AFSTAND = 20
+LAAD_HOOGTE_BOVEN = 90
+LAAD_HOOGTE_ONDER = 55
+LAAD_VERNIEUW_HOOGTE = 14
 SPRINGBLOK_INTERVAL = 8
 SPRINGBLOK_STAP = 6
 SPRINGBLOK_COOLDOWN = 0.7
@@ -47,6 +47,9 @@ BOOSTPAD_STAP = 4
 BOOSTPAD_COOLDOWN = 0.8
 BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
 PARCOURS_VOLGORDE = ["springblok", "boost", "ladder", "spiraal", "blokkade", "muurpad"]
+TOREN_STRAAL = 18
+TOREN_STRAAL_VARIATIE = 5.5
+TOREN_HOEK_BASIS = 12.5
 
 STIJL_NAMEN = [
     "makkelijke start",
@@ -147,60 +150,111 @@ def vec3_van(positie):
     return Vec3(positie[0], positie[1], positie[2])
 
 
+def normaliseer_richting(x, z):
+    """Maak van x en z een nette richting."""
+    lengte = (x * x + z * z) ** 0.5
+    if lengte == 0:
+        return Vec3(1, 0, 0)
+    return Vec3(x / lengte, 0, z / lengte)
+
+
+def kijk_richting():
+    """Kijk in welke richting de speler kijkt op de vloer."""
+    hoek = radians(player.rotation_y)
+    return normaliseer_richting(sin(hoek), cos(hoek))
+
+
+def zij_richting():
+    """Geef de zijrichting van de speler."""
+    richting = kijk_richting()
+    return normaliseer_richting(richting.z, -richting.x)
+
+
 def voeg_muren_toe(muur_data, level_nummer, stijl, x, y, breedte, gap, z):
     """Maak muurstukken voor de levels waar je langs muren moet springen."""
     muur_lengte = breedte + gap + 2.5
     muur_kleur = color.rgba(235, 235, 255, 170)
-
-    if level_nummer < 55:
-        return
+    buiten = normaliseer_richting(x, z)
+    zijkant = Vec3(-buiten.z, 0, buiten.x)
+    muur_afstand = 3.6 + min(2.4, gap)
 
     if stijl == 5:
         muur_data.append(
-            {"positie": (x, y + 3.4, 7.2), "schaal": (muur_lengte, 7.0, 1.2), "kleur": muur_kleur}
+            {
+                "positie": (x + zijkant.x * muur_afstand, y + 3.4, z + zijkant.z * muur_afstand),
+                "schaal": (3.0, 7.0, 3.0),
+                "kleur": muur_kleur,
+            }
         )
     elif stijl == 6:
         muur_data.append(
-            {"positie": (x, y + 3.4, -7.2), "schaal": (muur_lengte, 7.0, 1.2), "kleur": muur_kleur}
+            {
+                "positie": (x - zijkant.x * muur_afstand, y + 3.4, z - zijkant.z * muur_afstand),
+                "schaal": (3.0, 7.0, 3.0),
+                "kleur": muur_kleur,
+            }
         )
     elif stijl == 7:
         muur_data.append(
-            {"positie": (x, y + 3.7, 7.4), "schaal": (muur_lengte, 7.4, 1.2), "kleur": muur_kleur}
+            {
+                "positie": (x + zijkant.x * muur_afstand, y + 3.7, z + zijkant.z * muur_afstand),
+                "schaal": (3.0, 7.4, 3.0),
+                "kleur": muur_kleur,
+            }
         )
         muur_data.append(
-            {"positie": (x, y + 3.7, -7.4), "schaal": (muur_lengte, 7.4, 1.2), "kleur": muur_kleur}
+            {
+                "positie": (x - zijkant.x * muur_afstand, y + 3.7, z - zijkant.z * muur_afstand),
+                "schaal": (3.0, 7.4, 3.0),
+                "kleur": muur_kleur,
+            }
         )
     elif stijl == 8:
-        actieve_kant = 7.5 if z >= 0 else -7.5
         muur_data.append(
-            {"positie": (x, y + 4.0, actieve_kant), "schaal": (muur_lengte, 8.0, 1.2), "kleur": muur_kleur}
+            {
+                "positie": (x + buiten.x * (muur_afstand + 1.2), y + 4.0, z + buiten.z * (muur_afstand + 1.2)),
+                "schaal": (3.2, 8.0, 3.2),
+                "kleur": muur_kleur,
+            }
         )
     elif stijl == 9:
         muur_data.append(
-            {"positie": (x, y + 4.2, 7.8), "schaal": (muur_lengte, 8.4, 1.2), "kleur": muur_kleur}
+            {
+                "positie": (x + zijkant.x * muur_afstand, y + 4.2, z + zijkant.z * muur_afstand),
+                "schaal": (muur_lengte * 0.35, 8.4, 3.0),
+                "kleur": muur_kleur,
+            }
         )
         muur_data.append(
-            {"positie": (x, y + 4.2, -7.8), "schaal": (muur_lengte, 8.4, 1.2), "kleur": muur_kleur}
+            {
+                "positie": (x - zijkant.x * muur_afstand, y + 4.2, z - zijkant.z * muur_afstand),
+                "schaal": (muur_lengte * 0.35, 8.4, 3.0),
+                "kleur": muur_kleur,
+            }
         )
 
 
-def voeg_blokkade_muur_toe(muur_data, x, y, gap, breedte):
+def voeg_blokkade_muur_toe(muur_data, vorige_punt, huidig_punt):
     """Maak een muur midden op de route waar je langs moet springen."""
+    midden_x = (vorige_punt.x + huidig_punt.x) / 2
+    midden_y = (vorige_punt.y + huidig_punt.y) / 2
+    midden_z = (vorige_punt.z + huidig_punt.z) / 2
     muur_data.append(
         {
-            "positie": (x - breedte / 2 - gap / 2, y + 4.1, 0.0),
-            "schaal": (1.2, 8.2, 7.2),
+            "positie": (midden_x, midden_y + 4.1, midden_z),
+            "schaal": (3.5, 8.2, 3.5),
             "kleur": color.rgba(255, 245, 210, 190),
         }
     )
 
 
-def voeg_muurpad_toe(muur_data, x, y, breedte, gap, kant):
+def voeg_muurpad_toe(muur_data, x, y, z):
     """Maak een lange zijmuur waar je langs moet springen."""
+    buiten = normaliseer_richting(x, z)
     muur_data.append(
         {
-            "positie": (x, y + 3.7, kant),
-            "schaal": (breedte + gap + 2.3, 7.4, 1.1),
+            "positie": (x + buiten.x * 3.4, y + 3.7, z + buiten.z * 3.4),
+            "schaal": (3.0, 7.4, 3.0),
             "kleur": color.rgba(220, 240, 255, 185),
         }
     )
@@ -295,7 +349,7 @@ def maak_level_profiel(level, moeilijkheid):
 
 
 def bouw_baangegevens():
-    """Bouw een baan met veel korte levels die steeds moeilijker worden."""
+    """Bouw een toren van levels die steeds hoger wordt."""
     platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": color.azure}]
     muur_data = []
     ladder_data = []
@@ -303,13 +357,13 @@ def bouw_baangegevens():
     springblok_posities = []
     checkpoint_posities = []
     ster_posities = []
-    level_eindes = []
+    level_hoogtes = []
     level_namen = []
 
-    x = 0.0
     y = 0.0
-    z = 0.0
     vorige_breedte = STARTPLATFORM_SCHAAL
+    huidige_hoek = 0.0
+    vorig_platform_punt = Vec3(0, 0, 0)
 
     for level in range(AANTAL_LEVELS):
         moeilijkheid = level / max(1, AANTAL_LEVELS - 1)
@@ -319,9 +373,8 @@ def bouw_baangegevens():
         heeft_ladder = parcours_soort == "ladder"
         heeft_boostpad = parcours_soort == "boost"
         heeft_muurpad = parcours_soort == "muurpad"
-        blokkade_kant = OBSTAKEL_PAD_Z if (level // OBSTAKEL_MUUR_INTERVAL) % 2 == 0 else -OBSTAKEL_PAD_Z
         grote_sprong_stappen = 0
-        basis_y = level * 0.52 + (level // 8) * 0.7
+        basis_y = level * 7.2 + (level // 6) * 2.2
         basis_breedte = BEGIN_SCHAAL[0] + (EIND_SCHAAL[0] - BEGIN_SCHAAL[0]) * moeilijkheid
         basis_diepte = BEGIN_SCHAAL[1] + (EIND_SCHAAL[1] - BEGIN_SCHAAL[1]) * moeilijkheid
         vorige_positie_in_level = None
@@ -340,19 +393,25 @@ def bouw_baangegevens():
 
             if heeft_boostpad and stap in (BOOSTPAD_STAP + 1, BOOSTPAD_STAP + 2):
                 gap += 1.0
+            hoek_stap = TOREN_HOEK_BASIS + gap * 2.1
             if heeft_ladder and stap >= LADDER_STAP:
-                gap *= 0.82
+                hoek_stap *= 0.78
             if heeft_muurpad and stap >= 3:
-                gap *= 0.92
+                hoek_stap *= 0.9
+            if parcours_soort == "spiraal":
+                hoek_stap *= 1.15
 
-            x += vorige_breedte / 2 + gap + breedte / 2
+            huidige_hoek += hoek_stap
+            radius = TOREN_STRAAL + z_pat[stap % len(z_pat)] * 0.85
+            x = round(cos(radians(huidige_hoek)) * radius, 2)
+            z = round(sin(radians(huidige_hoek)) * radius, 2)
             y = basis_y + y_pat[stap % len(y_pat)] + extra_hoogte
-            z = z_pat[stap % len(z_pat)]
 
-            if heeft_blokkade_muur and stap in (4, 5, 6):
-                z = blokkade_kant + (0.8 if stap == 5 else 0.0)
-            elif heeft_blokkade_muur and stap in (7, 8):
-                z = blokkade_kant * 0.55
+            if heeft_blokkade_muur and stap in (4, 5, 6, 7):
+                midden_hoek = radians(huidige_hoek - 8)
+                blokkade_radius = TOREN_STRAAL + (2.4 if stap < 6 else -2.0)
+                x = round(cos(midden_hoek) * blokkade_radius, 2)
+                z = round(sin(midden_hoek) * blokkade_radius, 2)
 
             if level >= 80 and stap % 11 == 5:
                 y += 1.4
@@ -361,15 +420,16 @@ def bouw_baangegevens():
             elif level >= 20 and stap % 7 == 3:
                 y += 0.45
 
+            platform_punt = Vec3(x, y, z)
+
             platform_data.append(
                 {"positie": (x, y, z), "schaal": (breedte, 1.0, diepte), "kleur": level_kleur}
             )
             voeg_muren_toe(muur_data, level, stijl, x, y, breedte, gap, z)
-            if heeft_blokkade_muur and stap == 4:
-                voeg_blokkade_muur_toe(muur_data, x, y, gap, breedte)
+            if heeft_blokkade_muur and stap == 5:
+                voeg_blokkade_muur_toe(muur_data, vorig_platform_punt, platform_punt)
             if heeft_muurpad and stap in (4, 7, 10):
-                kant = 7.0 if z >= 0 else -7.0
-                voeg_muurpad_toe(muur_data, x, y, breedte, gap, kant)
+                voeg_muurpad_toe(muur_data, x, y, z)
             if heeft_ladder and stap == LADDER_STAP and vorige_positie_in_level is not None:
                 vorige_x, vorige_y, vorige_z = vorige_positie_in_level
                 ladder_hoogte = max(4.6, abs(y - vorige_y) + 3.4)
@@ -397,13 +457,15 @@ def bouw_baangegevens():
 
             vorige_breedte = breedte
             vorige_positie_in_level = (x, y, z)
+            vorig_platform_punt = platform_punt
 
-        level_eindes.append(x)
+        level_hoogtes.append(y)
         level_namen.append(level_naam)
 
-    finish_x = x + vorige_breedte / 2 + 8.0
-    finish_y = y + 0.3
-    finish_z = z
+    finish_radius = TOREN_STRAAL * 0.35
+    finish_x = round(cos(radians(huidige_hoek + 35)) * finish_radius, 2)
+    finish_y = y + 8.0
+    finish_z = round(sin(radians(huidige_hoek + 35)) * finish_radius, 2)
 
     platform_data.append(
         {"positie": (finish_x, finish_y, finish_z), "schaal": (FINISH_PLATFORM_SCHAAL, 1.0, FINISH_PLATFORM_SCHAAL), "kleur": color.gold}
@@ -417,7 +479,7 @@ def bouw_baangegevens():
         springblok_posities,
         checkpoint_posities,
         ster_posities,
-        level_eindes,
+        level_hoogtes,
         level_namen,
         doel_positie,
     )
@@ -431,7 +493,7 @@ def bouw_baangegevens():
     SPRINGBLOK_POSITIES,
     CHECKPOINT_POSITIES,
     STER_POSITIES,
-    LEVEL_EINDES,
+    LEVEL_HOOGTES,
     LEVEL_NAMEN,
     DOEL_POSITIE,
 ) = bouw_baangegevens()
@@ -541,10 +603,10 @@ def vernieuw_actieve_lijst(bron_data, actieve_lijst, maker, minimum_x, maximum_x
     gewenste_indexen = set()
 
     for index, data in enumerate(bron_data):
-        positie_x = data["positie"][0]
-        halve_breedte = data["schaal"][0] / 2
+        positie_y = data["positie"][1]
+        halve_hoogte = data["schaal"][1] / 2
 
-        if positie_x + halve_breedte < minimum_x or positie_x - halve_breedte > maximum_x:
+        if positie_y + halve_hoogte < minimum_x or positie_y - halve_hoogte > maximum_x:
             continue
 
         gewenste_indexen.add(index)
@@ -557,18 +619,18 @@ def vernieuw_actieve_lijst(bron_data, actieve_lijst, maker, minimum_x, maximum_x
 
 
 def vernieuw_actieve_baan(force=False):
-    """Laad alleen het stukje baan dat om de speler heen zit."""
+    """Laad alleen het stukje toren dat om de speler heen zit."""
     global laatste_laad_x
 
     if not force and laatste_laad_x is not None:
-        if abs(player.x - laatste_laad_x) < LAAD_VERNIEUW_AFSTAND:
+        if abs(player.y - laatste_laad_x) < LAAD_VERNIEUW_HOOGTE:
             return
 
-    minimum_x = player.x - LAAD_AFSTAND_ACHTERUIT
-    maximum_x = player.x + LAAD_AFSTAND_VOORUIT
+    minimum_x = player.y - LAAD_HOOGTE_ONDER
+    maximum_x = player.y + LAAD_HOOGTE_BOVEN
     vernieuw_actieve_lijst(PLATFORM_DATA, actieve_platforms, maak_platform, minimum_x, maximum_x)
     vernieuw_actieve_lijst(MUUR_DATA, actieve_muren, maak_muur, minimum_x, maximum_x)
-    laatste_laad_x = player.x
+    laatste_laad_x = player.y
 
 
 class ZwevendeSter(Entity):
@@ -592,20 +654,21 @@ class ZwevendeSter(Entity):
 
 
 def maak_wolken():
-    """Maak wolken langs de hele lange baan."""
+    """Maak wolken rondom de toren."""
     wolk_kleur = color.rgba(255, 255, 255, 170)
-    wolk_x = -60
+    voor_hoogte = 12
 
-    while wolk_x <= DOEL_POSITIE.x + 120:
-        z_basis = 16 if int(wolk_x / 220) % 2 == 0 else -16
-        Entity(model="sphere", color=wolk_kleur, position=(wolk_x, 18, z_basis), scale=(12, 4, 7))
-        Entity(model="sphere", color=wolk_kleur, position=(wolk_x + 8, 20, z_basis + 3), scale=(10, 3, 6))
-        Entity(model="sphere", color=wolk_kleur, position=(wolk_x - 6, 19, z_basis - 4), scale=(9, 3, 5))
-        wolk_x += 220
+    while voor_hoogte <= DOEL_POSITIE.y + 40:
+        straal = TOREN_STRAAL + 18 + (int(voor_hoogte / 20) % 3) * 4
+        for hoek in (0, 90, 180, 270):
+            x = round(cos(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
+            z = round(sin(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
+            Entity(model="sphere", color=wolk_kleur, position=(x, voor_hoogte, z), scale=(11, 4, 7))
+        voor_hoogte += 22
 
 
 def maak_wereld():
-    """Bouw de hele parkourwereld."""
+    """Bouw de hele parkourtoren."""
     Sky()
     AmbientLight(color=color.rgba(180, 180, 220, 120))
     DirectionalLight(y=25, z=10, rotation=(45, -35, 0))
@@ -613,8 +676,8 @@ def maak_wereld():
     # Dit is de mist onder de baan. Als je daaronder valt, ga je terug.
     Entity(
         model="plane",
-        position=(DOEL_POSITIE.x / 2, -14, 0),
-        scale=DOEL_POSITIE.x * 2.4,
+        position=(0, -14, 0),
+        scale=160,
         color=color.red.tint(-0.15),
     )
 
@@ -639,7 +702,7 @@ def maak_wereld():
     for positie in SPRINGBLOK_POSITIES:
         springblokken.append(maak_springblok(positie))
 
-    # Deze vlag laat zien waar het einde van de baan is.
+    # Deze vlag laat zien waar het einde van de toren is.
     Entity(model="cube", position=(DOEL_POSITIE.x, DOEL_POSITIE.y + 1.0, DOEL_POSITIE.z), scale=(0.25, 7, 0.25), color=color.white)
     Entity(model="cube", position=(DOEL_POSITIE.x + 1.1, DOEL_POSITIE.y + 3.6, DOEL_POSITIE.z), scale=(2.4, 1.4, 0.15), color=color.red)
     Entity(model="sphere", position=DOEL_POSITIE, scale=1.7, color=color.yellow)
@@ -861,7 +924,8 @@ def gebruik_springblok():
 
     for springblok in springblokken:
         if distance(speler_hoogte, springblok.position) < 1.4:
-            player.position = player.position + Vec3(5.0, 4.2, 0)
+            richting = kijk_richting()
+            player.position = player.position + Vec3(richting.x * 5.0, 4.2, richting.z * 5.0)
             player.air_time = 0
             laatste_springblok_tijd = nu
             vernieuw_actieve_baan(force=True)
@@ -881,7 +945,8 @@ def gebruik_boostpad():
 
     for boostpad in boostpads:
         if distance(speler_hoogte, boostpad.position) < 1.6:
-            player.position = player.position + Vec3(7.5, 1.0, 0)
+            richting = kijk_richting()
+            player.position = player.position + Vec3(richting.x * 7.5, 1.0, richting.z * 7.5)
             player.air_time = 0
             laatste_boostpad_tijd = nu
             vernieuw_actieve_baan(force=True)
@@ -898,15 +963,17 @@ def klim_ladder():
             continue
 
         if held_keys["w"]:
-            player.position = player.position + Vec3(1.8 * time.dt, 5.6 * time.dt, 0)
+            player.x = ladder.x
             player.z = ladder.z
+            player.position = player.position + Vec3(0, 5.6 * time.dt, 0)
             player.air_time = 0
             vernieuw_actieve_baan(force=True)
             return True
 
         if held_keys["s"]:
-            player.position = player.position + Vec3(-0.6 * time.dt, -3.8 * time.dt, 0)
+            player.x = ladder.x
             player.z = ladder.z
+            player.position = player.position + Vec3(0, -3.8 * time.dt, 0)
             player.air_time = 0
             vernieuw_actieve_baan(force=True)
             return True
@@ -917,9 +984,10 @@ def klim_ladder():
 def vind_muursprong():
     """Kijk of er vlak naast de speler een muur zit voor een muursprong."""
     startpunt = player.position + Vec3(0, 1.1, 0)
+    rechts = zij_richting()
     richtingen = [
-        (Vec3(0, 0, 1), Vec3(2.7, 2.3, -2.6)),
-        (Vec3(0, 0, -1), Vec3(2.7, 2.3, 2.6)),
+        (rechts, Vec3(-rechts.x * 2.8, 2.3, -rechts.z * 2.8)),
+        (Vec3(-rechts.x, 0, -rechts.z), Vec3(rechts.x * 2.8, 2.3, rechts.z * 2.8)),
     ]
 
     for richting, sprong in richtingen:
@@ -960,8 +1028,8 @@ def maak_tijd_tekst(seconden):
 
 def huidige_level_nummer():
     """Kijk in welk level van de baan je ongeveer bent."""
-    for nummer, eind_x in enumerate(LEVEL_EINDES, start=1):
-        if player.x <= eind_x:
+    for nummer, eind_y in enumerate(LEVEL_HOOGTES, start=1):
+        if player.y <= eind_y:
             return nummer
     return AANTAL_LEVELS
 
@@ -1009,7 +1077,7 @@ def herstart_spel():
 def update_status():
     """Werk de tekst linksboven bij met score, tijd en level."""
     huidig_einde = eind_tijd if eind_tijd is not None else perf_counter()
-    voortgang = int(max(0, min(100, (player.x / DOEL_POSITIE.x) * 100)))
+    voortgang = int(max(0, min(100, (player.y / DOEL_POSITIE.y) * 100)))
     level_nummer = huidige_level_nummer()
     status_tekst.text = (
         f"Sterren: {gehaalde_sterren}/{TOTAAL_STERREN}\n"
@@ -1035,13 +1103,13 @@ uitleg_tekst = Text(
     parent=camera.ui,
     text=(
         "Wolken Parkour 3D\n"
-        "100 korte levels\n"
-        "1300 sprongen totaal\n"
+        "Toren van 100 levels\n"
+        "1300 sprongen omhoog\n"
         "Rondje omhoog en ladders\n"
         "Blauw vlak = snelheidsboost\n"
         "Groen blok = super sprong\n"
         "Spatie langs muur = muursprong\n"
-        "Steeds een nieuw stukje\n"
+        "Klim helemaal naar boven\n"
         "WASD + muis + spatie\n"
         "R = opnieuw"
     ),
@@ -1056,7 +1124,7 @@ einde_tekst = Text(parent=camera.ui, y=0.08, origin=(0, 0), scale=2.0, color=col
 
 maak_sterren_opnieuw()
 if not laad_voortgang():
-    toon_melding("Nu zijn er veel meer korte levels. Succes!")
+    toon_melding("Klim helemaal naar de top van de toren!")
 
 
 def input(key):
@@ -1111,7 +1179,7 @@ def update():
             einde_tekst.text = (
                 "Jij hebt gewonnen!\n"
                 f"Tijd: {maak_tijd_tekst(eind_tijd - start_tijd)}\n"
-                "Je hebt de 100x lange baan gehaald!\n"
+                "Je hebt de hele toren gehaald!\n"
                 "Druk op R voor een nieuw potje."
             )
             wis_opslag()
