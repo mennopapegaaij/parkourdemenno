@@ -9,7 +9,6 @@ from ursina import (
     AmbientLight,
     DirectionalLight,
     Entity,
-    Sky,
     Text,
     Ursina,
     Vec3,
@@ -520,7 +519,7 @@ TOTAAL_STERREN = len(STER_POSITIES)
 app = Ursina()
 window.title = TITEL
 window.borderless = False
-window.color = color.rgb(145, 205, 255)
+window.color = color.rgb(32, 44, 96)
 window.exit_button.visible = False
 window.fps_counter.enabled = True
 camera.fov = 95
@@ -550,7 +549,6 @@ def maak_platform(positie, schaal, kleur_blok):
     """Maak een springblok waar de speler op kan landen."""
     blok = Entity(
         model="cube",
-        texture="white_cube",
         shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
@@ -565,7 +563,6 @@ def maak_muur(positie, schaal, kleur_blok):
     """Maak een hoge muur langs de springroute."""
     muur = Entity(
         model="cube",
-        texture="white_cube",
         shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
@@ -580,7 +577,6 @@ def maak_springblok(positie, kleur_blok):
     """Maak een fel blok dat je extra ver omhoog schiet."""
     blok = Entity(
         model="cube",
-        texture="white_cube",
         shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
@@ -595,7 +591,6 @@ def maak_ladder(positie, schaal, kleur_blok):
     """Maak een ladder waar je omhoog kunt klimmen."""
     ladder = Entity(
         model="cube",
-        texture="white_cube",
         shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
@@ -610,7 +605,6 @@ def maak_boostpad(positie, kleur_blok):
     """Maak een fel snelheidsvlak dat je vooruit duwt."""
     pad = Entity(
         model="cube",
-        texture="white_cube",
         shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
@@ -679,22 +673,11 @@ class ZwevendeSter(Entity):
 
 def maak_wolken():
     """Maak wolken rondom de toren."""
-    voor_hoogte = 12
-
-    while voor_hoogte <= DOEL_POSITIE.y + 40:
-        straal = TOREN_STRAAL + 30 + (int(voor_hoogte / 20) % 3) * 6
-        wolk_level = level_nummer_bij_hoogte(voor_hoogte) - 1
-        wolk_kleur = kleur_van_level(wolk_level, 0.58, 90)
-        for hoek in (0, 90, 180, 270):
-            x = round(cos(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
-            z = round(sin(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
-            Entity(model="sphere", shader=unlit_shader, color=wolk_kleur, position=(x, voor_hoogte, z), scale=(7, 2.5, 5))
-        voor_hoogte += 28
+    return
 
 
 def maak_wereld():
     """Bouw de hele parkourtoren."""
-    Sky()
     AmbientLight(color=color.rgba(180, 180, 220, 120))
     DirectionalLight(y=25, z=10, rotation=(45, -35, 0))
 
@@ -709,7 +692,6 @@ def maak_wereld():
     for checkpoint_info in CHECKPOINT_DATA:
         checkpoint = Entity(
             model="cube",
-            texture="white_cube",
             shader=unlit_shader,
             color=checkpoint_info["kleur"],
             position=vec3_van(checkpoint_info["positie"]),
