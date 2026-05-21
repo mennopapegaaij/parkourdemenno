@@ -1,7 +1,7 @@
 """Wolken Parkour 3D - een lang 3D parkourspel."""
 
 import json
-from math import cos, radians, sin
+from math import atan2, cos, degrees, radians, sin
 from pathlib import Path
 from time import perf_counter
 
@@ -515,6 +515,8 @@ def bouw_baangegevens():
     DOEL_POSITIE,
 ) = bouw_baangegevens()
 TOTAAL_STERREN = len(STER_POSITIES)
+EERSTE_SPRONG_POSITIE = vec3_van(PLATFORM_DATA[1]["positie"])
+START_ROTATIE_Y = degrees(atan2(EERSTE_SPRONG_POSITIE.x - START_PUNT.x, EERSTE_SPRONG_POSITIE.z - START_PUNT.z))
 
 app = Ursina()
 window.title = TITEL
@@ -523,6 +525,7 @@ window.color = color.rgb(32, 44, 96)
 window.exit_button.visible = False
 window.fps_counter.enabled = True
 camera.fov = 95
+camera.clear_color = color.rgb(32, 44, 96)
 
 sterren = []
 boostpads = []
@@ -908,7 +911,9 @@ def laad_voortgang():
             speler_punt = Vec3(spawn_punt.x, spawn_punt.y, spawn_punt.z)
 
     player.position = speler_punt
-    player.rotation_y = lees_getal(opslag.get("rotatie_y"), 0.0)
+    player.rotation_y = lees_getal(opslag.get("rotatie_y"), START_ROTATIE_Y)
+    if laatste_checkpoint < 0 and distance(player.position, START_PUNT) < 4:
+        player.rotation_y = START_ROTATIE_Y
     player.camera_pivot.rotation_x = lees_getal(opslag.get("kijk_x"), 0.0)
     player.air_time = 0
     vernieuw_actieve_baan(force=True)
@@ -1073,7 +1078,7 @@ def moeilijkheid_tekst(level_nummer):
 def zet_speler_terug(tekst):
     """Zet de speler terug op het laatste veilige punt."""
     player.position = Vec3(spawn_punt.x, spawn_punt.y, spawn_punt.z)
-    player.rotation_y = 0
+    player.rotation_y = START_ROTATIE_Y
     player.camera_pivot.rotation_x = 0
     player.air_time = 0
     vernieuw_actieve_baan(force=True)
@@ -1122,6 +1127,7 @@ maak_wereld()
 
 # De speler kijkt in first person, alsof je zelf in het spel staat.
 player = FirstPersonController(position=START_PUNT)
+player.rotation_y = START_ROTATIE_Y
 player.speed = START_SNELHEID
 player.jump_height = 2.8
 player.jump_up_duration = 0.42
