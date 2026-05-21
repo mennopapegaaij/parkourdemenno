@@ -6,6 +6,7 @@ Een vrolijke 3D parkourtoren in Python met `ursina`.
 
 - De baan heeft nu **veel meer korte levels**
 - De levels vormen nu samen een **grote toren omhoog**
+- Elk level heeft nu zijn eigen **regenboogkleur**
 - Elk level is korter, dus je komt sneller in een nieuw stukje
 - De levels **herhalen niet steeds opnieuw**
 - Elk level heeft nu **sowieso een speciaal ding**
@@ -25,8 +26,8 @@ Een vrolijke 3D parkourtoren in Python met `ursina`.
 - Speel ook rondjes omhoog, ladder-klimmen en snelheidsstukken
 - Spring langs muren die midden in de weg staan
 - Klim en daal over stukken met heel grote hoogteverschillen
-- Gebruik blauwe snelheidsvlakken voor een extra duw vooruit
-- Gebruik groene springblokken voor extra hoge sprongen
+- Gebruik felle snelheidsvlakken voor een extra duw vooruit
+- Gebruik felle springblokken voor extra hoge sprongen
 - Druk op `Spatie` langs een muur voor een muursprong
 - Pak alle sterren
 - Haal checkpoints zodat je niet te ver terug hoeft

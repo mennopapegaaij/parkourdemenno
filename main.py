@@ -64,17 +64,14 @@ STIJL_NAMEN = [
     "eindbaas",
 ]
 
-STIJL_KLEUREN = [
-    color.azure,
-    color.lime,
-    color.orange,
-    color.cyan,
-    color.violet,
-    color.rgb(255, 170, 80),
-    color.rgb(120, 220, 255),
-    color.rgb(255, 110, 160),
-    color.rgb(255, 215, 110),
-    color.rgb(255, 100, 100),
+REGENBOOG_RGB = [
+    (255, 90, 90),
+    (255, 160, 70),
+    (255, 220, 80),
+    (120, 235, 110),
+    (90, 220, 255),
+    (120, 150, 255),
+    (220, 120, 255),
 ]
 
 STIJL_Z_PATROON = [
@@ -170,10 +167,31 @@ def zij_richting():
     return normaliseer_richting(richting.z, -richting.x)
 
 
+def begrens_kleur(waarde):
+    """Zorg dat een kleurkanaal netjes tussen 0 en 255 blijft."""
+    return max(0, min(255, int(waarde)))
+
+
+def maak_rgb_kleur(rgb, helderheid=1.0, alpha=255):
+    """Maak van een rgb-tuple een kleur met meer of minder licht."""
+    rood, groen, blauw = rgb
+    return color.rgba(
+        begrens_kleur(rood * helderheid),
+        begrens_kleur(groen * helderheid),
+        begrens_kleur(blauw * helderheid),
+        begrens_kleur(alpha),
+    )
+
+
+def kleur_van_level(level_nummer, helderheid=1.0, alpha=255):
+    """Geef elk level een kleur uit de regenboog."""
+    return maak_rgb_kleur(REGENBOOG_RGB[level_nummer % len(REGENBOOG_RGB)], helderheid, alpha)
+
+
 def voeg_muren_toe(muur_data, level_nummer, stijl, x, y, breedte, gap, z):
     """Maak muurstukken voor de levels waar je langs muren moet springen."""
     muur_lengte = breedte + gap + 2.5
-    muur_kleur = color.rgba(235, 235, 255, 170)
+    muur_kleur = kleur_van_level(level_nummer, 0.72, 200)
     buiten = normaliseer_richting(x, z)
     zijkant = Vec3(-buiten.z, 0, buiten.x)
     muur_afstand = 3.6 + min(2.4, gap)
@@ -234,7 +252,7 @@ def voeg_muren_toe(muur_data, level_nummer, stijl, x, y, breedte, gap, z):
         )
 
 
-def voeg_blokkade_muur_toe(muur_data, vorige_punt, huidig_punt):
+def voeg_blokkade_muur_toe(muur_data, vorige_punt, huidig_punt, level_nummer):
     """Maak een muur midden op de route waar je langs moet springen."""
     midden_x = (vorige_punt.x + huidig_punt.x) / 2
     midden_y = (vorige_punt.y + huidig_punt.y) / 2
@@ -243,19 +261,19 @@ def voeg_blokkade_muur_toe(muur_data, vorige_punt, huidig_punt):
         {
             "positie": (midden_x, midden_y + 4.1, midden_z),
             "schaal": (3.5, 8.2, 3.5),
-            "kleur": color.rgba(255, 245, 210, 190),
+            "kleur": kleur_van_level(level_nummer, 0.8, 205),
         }
     )
 
 
-def voeg_muurpad_toe(muur_data, x, y, z):
+def voeg_muurpad_toe(muur_data, x, y, z, level_nummer):
     """Maak een lange zijmuur waar je langs moet springen."""
     buiten = normaliseer_richting(x, z)
     muur_data.append(
         {
             "positie": (x + buiten.x * 3.4, y + 3.7, z + buiten.z * 3.4),
             "schaal": (3.0, 7.4, 3.0),
-            "kleur": color.rgba(220, 240, 255, 185),
+            "kleur": kleur_van_level(level_nummer, 0.76, 195),
         }
     )
 
@@ -309,7 +327,7 @@ def maak_level_profiel(level, moeilijkheid):
         y_pat.append(round(y_waarde + hoogte_waarde, 2))
 
     level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} {STIJL_NAMEN[basis_stijl]}"
-    level_kleur = STIJL_KLEUREN[(basis_stijl + variant) % len(STIJL_KLEUREN)]
+    level_kleur = kleur_van_level(level, 1.0)
 
     if parcours_soort == "spiraal":
         draai = -1 if variant % 2 else 1
@@ -318,46 +336,41 @@ def maak_level_profiel(level, moeilijkheid):
         z_pat = [round(waarde * draai, 2) for waarde in spiraal_z]
         y_pat = [round(stap * klim + sin(stap * 0.7) * (0.5 + moeilijkheid * 0.3), 2) for stap in range(SPRONGEN_PER_LEVEL)]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} rondje omhoog"
-        level_kleur = color.rgb(255, 215, 120)
     elif parcours_soort == "ladder":
         z_pat = [0.0, 0.3, 0.8, 0.9, 0.5, 0.2, 0.0, -0.2, -0.5, -0.4, 0.0, 0.4, 0.0]
         y_pat = [0.0, 0.7, 1.3, 1.8, 2.2, 5.0, 6.5, 7.6, 8.6, 9.2, 10.1, 10.9, 11.7]
         y_pat = [round(waarde * (0.75 + moeilijkheid * 0.45), 2) for waarde in y_pat]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} ladder klim"
-        level_kleur = color.rgb(205, 170, 95)
     elif parcours_soort == "boost":
         z_pat = [0.0, 0.8, 1.8, 3.2, 1.6, 0.0, -1.6, -3.2, -1.8, -0.8, 0.0, 1.4, 0.0]
         y_pat = [0.0, 0.4, 1.0, 1.4, 1.0, 0.4, 0.1, 0.8, 1.5, 2.3, 3.0, 2.0, 1.2]
         y_pat = [round(waarde * (0.8 + moeilijkheid * 0.35), 2) for waarde in y_pat]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} snelheidsbaan"
-        level_kleur = color.rgb(120, 220, 255)
     elif parcours_soort == "blokkade":
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} muurroute"
-        level_kleur = color.rgb(255, 225, 150)
     elif parcours_soort == "springblok":
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} springblokbaan"
-        level_kleur = color.rgb(120, 255, 150)
     elif parcours_soort == "muurpad":
         z_pat = [4.6, 5.0, 5.4, 5.8, 5.8, 5.4, 5.0, 4.6, 4.2, 4.6, 5.0, 5.4, 5.8]
         if variant % 2 == 1:
             z_pat = [-waarde for waarde in z_pat]
         y_pat = [round(waarde * (0.85 + moeilijkheid * 0.4), 2) for waarde in y_pat]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} muurpad"
-        level_kleur = color.rgb(170, 220, 255)
 
     return basis_stijl, level_kleur, z_pat, y_pat, level_naam, parcours_soort
 
 
 def bouw_baangegevens():
     """Bouw een toren van levels die steeds hoger wordt."""
-    platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": color.azure}]
+    platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": kleur_van_level(0, 0.95)}]
     muur_data = []
     ladder_data = []
-    boostpad_posities = []
-    springblok_posities = []
-    checkpoint_posities = []
+    boostpad_data = []
+    springblok_data = []
+    checkpoint_data = []
     ster_posities = []
     level_hoogtes = []
+    level_kleuren = []
     level_namen = []
 
     y = 0.0
@@ -427,9 +440,9 @@ def bouw_baangegevens():
             )
             voeg_muren_toe(muur_data, level, stijl, x, y, breedte, gap, z)
             if heeft_blokkade_muur and stap == 5:
-                voeg_blokkade_muur_toe(muur_data, vorig_platform_punt, platform_punt)
+                voeg_blokkade_muur_toe(muur_data, vorig_platform_punt, platform_punt, level)
             if heeft_muurpad and stap in (4, 7, 10):
-                voeg_muurpad_toe(muur_data, x, y, z)
+                voeg_muurpad_toe(muur_data, x, y, z, level)
             if heeft_ladder and stap == LADDER_STAP and vorige_positie_in_level is not None:
                 vorige_x, vorige_y, vorige_z = vorige_positie_in_level
                 ladder_hoogte = max(4.6, abs(y - vorige_y) + 3.4)
@@ -437,20 +450,20 @@ def bouw_baangegevens():
                     {
                         "positie": ((vorige_x + x) / 2, min(vorige_y, y) + ladder_hoogte / 2 - 0.5, (vorige_z + z) / 2),
                         "schaal": (0.9, ladder_hoogte, 1.1),
-                        "kleur": color.rgb(210, 165, 95),
+                        "kleur": kleur_van_level(level, 0.78),
                     }
                 )
             if heeft_boostpad and stap == BOOSTPAD_STAP:
-                boostpad_posities.append((x, y + 0.65, z))
+                boostpad_data.append({"positie": (x, y + 0.65, z), "kleur": kleur_van_level(level, 1.14), "level": level})
 
             if heeft_springblok and stap == SPRINGBLOK_STAP:
-                springblok_posities.append((x, y + 0.7, z))
+                springblok_data.append({"positie": (x, y + 0.7, z), "kleur": kleur_van_level(level, 1.22), "level": level})
                 grote_sprong_stappen = 2
             elif grote_sprong_stappen > 0:
                 grote_sprong_stappen -= 1
 
             if wereld_stap % CHECKPOINT_INTERVAL == 0:
-                checkpoint_posities.append((x, y + 0.7, z))
+                checkpoint_data.append({"positie": (x, y + 0.7, z), "kleur": kleur_van_level(level, 0.85), "level": level})
 
             if (level + 1) % STER_INTERVAL == 0 and stap == SPRONGEN_PER_LEVEL - 1:
                 ster_posities.append((x, y + 1.6, z))
@@ -460,26 +473,29 @@ def bouw_baangegevens():
             vorig_platform_punt = platform_punt
 
         level_hoogtes.append(y)
+        level_kleuren.append(level_kleur)
         level_namen.append(level_naam)
 
     finish_radius = TOREN_STRAAL * 0.35
     finish_x = round(cos(radians(huidige_hoek + 35)) * finish_radius, 2)
     finish_y = y + 8.0
     finish_z = round(sin(radians(huidige_hoek + 35)) * finish_radius, 2)
+    top_kleur = kleur_van_level(AANTAL_LEVELS - 1, 1.18)
 
     platform_data.append(
-        {"positie": (finish_x, finish_y, finish_z), "schaal": (FINISH_PLATFORM_SCHAAL, 1.0, FINISH_PLATFORM_SCHAAL), "kleur": color.gold}
+        {"positie": (finish_x, finish_y, finish_z), "schaal": (FINISH_PLATFORM_SCHAAL, 1.0, FINISH_PLATFORM_SCHAAL), "kleur": top_kleur}
     )
     doel_positie = Vec3(finish_x, finish_y + 2.2, finish_z)
     return (
         platform_data,
         muur_data,
         ladder_data,
-        boostpad_posities,
-        springblok_posities,
-        checkpoint_posities,
+        boostpad_data,
+        springblok_data,
+        checkpoint_data,
         ster_posities,
         level_hoogtes,
+        level_kleuren,
         level_namen,
         doel_positie,
     )
@@ -489,11 +505,12 @@ def bouw_baangegevens():
     PLATFORM_DATA,
     MUUR_DATA,
     LADDER_DATA,
-    BOOSTPAD_POSITIES,
-    SPRINGBLOK_POSITIES,
-    CHECKPOINT_POSITIES,
+    BOOSTPAD_DATA,
+    SPRINGBLOK_DATA,
+    CHECKPOINT_DATA,
     STER_POSITIES,
     LEVEL_HOOGTES,
+    LEVEL_KLEUREN,
     LEVEL_NAMEN,
     DOEL_POSITIE,
 ) = bouw_baangegevens()
@@ -556,12 +573,12 @@ def maak_muur(positie, schaal, kleur_blok):
     return muur
 
 
-def maak_springblok(positie):
-    """Maak een groen blok dat je extra ver omhoog schiet."""
+def maak_springblok(positie, kleur_blok):
+    """Maak een fel blok dat je extra ver omhoog schiet."""
     blok = Entity(
         model="cube",
         texture="white_cube",
-        color=color.rgb(80, 255, 120),
+        color=kleur_blok,
         position=vec3_van(positie),
         scale=SPRINGBLOK_SCHAAL,
         collider="box",
@@ -584,12 +601,12 @@ def maak_ladder(positie, schaal, kleur_blok):
     return ladder
 
 
-def maak_boostpad(positie):
-    """Maak een blauw snelheidsvlak dat je vooruit duwt."""
+def maak_boostpad(positie, kleur_blok):
+    """Maak een fel snelheidsvlak dat je vooruit duwt."""
     pad = Entity(
         model="cube",
         texture="white_cube",
-        color=color.rgb(120, 220, 255),
+        color=kleur_blok,
         position=vec3_van(positie),
         scale=BOOSTPAD_SCHAAL,
         collider="box",
@@ -655,11 +672,12 @@ class ZwevendeSter(Entity):
 
 def maak_wolken():
     """Maak wolken rondom de toren."""
-    wolk_kleur = color.rgba(255, 255, 255, 170)
     voor_hoogte = 12
 
     while voor_hoogte <= DOEL_POSITIE.y + 40:
         straal = TOREN_STRAAL + 18 + (int(voor_hoogte / 20) % 3) * 4
+        wolk_level = level_nummer_bij_hoogte(voor_hoogte) - 1
+        wolk_kleur = kleur_van_level(wolk_level, 1.08, 170)
         for hoek in (0, 90, 180, 270):
             x = round(cos(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
             z = round(sin(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
@@ -681,31 +699,44 @@ def maak_wereld():
         color=color.red.tint(-0.15),
     )
 
-    for positie in CHECKPOINT_POSITIES:
+    for checkpoint_info in CHECKPOINT_DATA:
         checkpoint = Entity(
             model="cube",
             texture="white_cube",
-            color=color.rgb(100, 140, 255),
-            position=vec3_van(positie),
+            color=checkpoint_info["kleur"],
+            position=vec3_van(checkpoint_info["positie"]),
             scale=(2.8, 0.3, 2.8),
             collider="box",
         )
         checkpoint.actief = False
+        checkpoint.level_index = checkpoint_info["level"]
+        checkpoint.basis_kleur = checkpoint_info["kleur"]
+        checkpoint.actieve_kleur = kleur_van_level(checkpoint.level_index, 1.25)
         checkpoints.append(checkpoint)
 
     for ladder_info in LADDER_DATA:
         ladders.append(maak_ladder(ladder_info["positie"], ladder_info["schaal"], ladder_info["kleur"]))
 
-    for positie in BOOSTPAD_POSITIES:
-        boostpads.append(maak_boostpad(positie))
+    for boostpad_info in BOOSTPAD_DATA:
+        boostpads.append(maak_boostpad(boostpad_info["positie"], boostpad_info["kleur"]))
 
-    for positie in SPRINGBLOK_POSITIES:
-        springblokken.append(maak_springblok(positie))
+    for springblok_info in SPRINGBLOK_DATA:
+        springblokken.append(maak_springblok(springblok_info["positie"], springblok_info["kleur"]))
 
     # Deze vlag laat zien waar het einde van de toren is.
-    Entity(model="cube", position=(DOEL_POSITIE.x, DOEL_POSITIE.y + 1.0, DOEL_POSITIE.z), scale=(0.25, 7, 0.25), color=color.white)
-    Entity(model="cube", position=(DOEL_POSITIE.x + 1.1, DOEL_POSITIE.y + 3.6, DOEL_POSITIE.z), scale=(2.4, 1.4, 0.15), color=color.red)
-    Entity(model="sphere", position=DOEL_POSITIE, scale=1.7, color=color.yellow)
+    Entity(
+        model="cube",
+        position=(DOEL_POSITIE.x, DOEL_POSITIE.y + 1.0, DOEL_POSITIE.z),
+        scale=(0.25, 7, 0.25),
+        color=kleur_van_level(AANTAL_LEVELS - 1, 0.78),
+    )
+    Entity(
+        model="cube",
+        position=(DOEL_POSITIE.x + 1.1, DOEL_POSITIE.y + 3.6, DOEL_POSITIE.z),
+        scale=(2.4, 1.4, 0.15),
+        color=kleur_van_level(AANTAL_LEVELS - 1, 1.25),
+    )
+    Entity(model="sphere", position=DOEL_POSITIE, scale=1.7, color=kleur_van_level(AANTAL_LEVELS - 1, 1.35))
 
     maak_wolken()
 
@@ -828,7 +859,7 @@ def zet_checkpoint_status(checkpoint_lijst):
     """Zet checkpoints aan of uit op basis van de opslag."""
     for nummer, checkpoint in enumerate(checkpoints):
         checkpoint.actief = nummer < len(checkpoint_lijst) and bool(checkpoint_lijst[nummer])
-        checkpoint.color = color.lime if checkpoint.actief else color.rgb(100, 140, 255)
+        checkpoint.color = checkpoint.actieve_kleur if checkpoint.actief else checkpoint.basis_kleur
 
 
 def laad_voortgang():
@@ -909,11 +940,12 @@ def toon_melding(tekst, duur=2.4):
     global melding_tijd
 
     melding_tekst.text = tekst
+    melding_tekst.color = kleur_van_level(huidige_level_nummer() - 1, 1.28)
     melding_tijd = duur
 
 
 def gebruik_springblok():
-    """Schiet de speler omhoog en vooruit vanaf een groen blok."""
+    """Schiet de speler omhoog en vooruit vanaf een fel blok."""
     global laatste_springblok_tijd
 
     speler_hoogte = player.position + Vec3(0, 1.0, 0)
@@ -934,7 +966,7 @@ def gebruik_springblok():
 
 
 def gebruik_boostpad():
-    """Duw de speler vooruit over een blauw snelheidsvlak."""
+    """Duw de speler vooruit over een fel snelheidsvlak."""
     global laatste_boostpad_tijd
 
     speler_hoogte = player.position + Vec3(0, 1.0, 0)
@@ -1026,12 +1058,17 @@ def maak_tijd_tekst(seconden):
     return f"{minuten}:{rest_seconden:02d}"
 
 
-def huidige_level_nummer():
-    """Kijk in welk level van de baan je ongeveer bent."""
+def level_nummer_bij_hoogte(hoogte):
+    """Zoek welk level bij een hoogte hoort."""
     for nummer, eind_y in enumerate(LEVEL_HOOGTES, start=1):
-        if player.y <= eind_y:
+        if hoogte <= eind_y:
             return nummer
     return AANTAL_LEVELS
+
+
+def huidige_level_nummer():
+    """Kijk in welk level van de baan je ongeveer bent."""
+    return level_nummer_bij_hoogte(player.y)
 
 
 def moeilijkheid_tekst(level_nummer):
@@ -1067,7 +1104,7 @@ def herstart_spel():
 
     for checkpoint in checkpoints:
         checkpoint.actief = False
-        checkpoint.color = color.rgb(100, 140, 255)
+        checkpoint.color = checkpoint.basis_kleur
 
     maak_sterren_opnieuw()
     zet_speler_terug("Nieuw potje! Klaar voor de superlange baan?")
@@ -1079,6 +1116,7 @@ def update_status():
     huidig_einde = eind_tijd if eind_tijd is not None else perf_counter()
     voortgang = int(max(0, min(100, (player.y / DOEL_POSITIE.y) * 100)))
     level_nummer = huidige_level_nummer()
+    status_tekst.color = LEVEL_KLEUREN[level_nummer - 1]
     status_tekst.text = (
         f"Sterren: {gehaalde_sterren}/{TOTAAL_STERREN}\n"
         f"Tijd: {maak_tijd_tekst(huidig_einde - start_tijd)}\n"
@@ -1106,8 +1144,8 @@ uitleg_tekst = Text(
         "Toren van 100 levels\n"
         "1300 sprongen omhoog\n"
         "Rondje omhoog en ladders\n"
-        "Blauw vlak = snelheidsboost\n"
-        "Groen blok = super sprong\n"
+        "Fel vlak = snelheidsboost\n"
+        "Fel blok = super sprong\n"
         "Spatie langs muur = muursprong\n"
         "Klim helemaal naar boven\n"
         "WASD + muis + spatie\n"
@@ -1116,11 +1154,12 @@ uitleg_tekst = Text(
     x=-0.86,
     y=0.38,
     scale=1.05,
+    color=kleur_van_level(0, 1.12),
 )
 
-status_tekst = Text(parent=camera.ui, x=-0.86, y=0.08, scale=1.05)
-melding_tekst = Text(parent=camera.ui, y=0.38, origin=(0, 0), scale=1.8, color=color.white)
-einde_tekst = Text(parent=camera.ui, y=0.08, origin=(0, 0), scale=2.0, color=color.yellow)
+status_tekst = Text(parent=camera.ui, x=-0.86, y=0.08, scale=1.05, color=kleur_van_level(0, 1.0))
+melding_tekst = Text(parent=camera.ui, y=0.38, origin=(0, 0), scale=1.8, color=kleur_van_level(0, 1.28))
+einde_tekst = Text(parent=camera.ui, y=0.08, origin=(0, 0), scale=2.0, color=kleur_van_level(AANTAL_LEVELS - 1, 1.35))
 
 maak_sterren_opnieuw()
 if not laad_voortgang():
@@ -1164,7 +1203,7 @@ def update():
     for nummer, checkpoint in enumerate(checkpoints, start=1):
         if not checkpoint.actief and distance(player.position, checkpoint.position + Vec3(0, 1.2, 0)) < 1.9:
             checkpoint.actief = True
-            checkpoint.color = color.lime
+            checkpoint.color = checkpoint.actieve_kleur
             spawn_punt = Vec3(checkpoint.x, checkpoint.y + 2, checkpoint.z)
             toon_melding(f"Checkpoint {nummer} gehaald!")
             bewaar_voortgang()
