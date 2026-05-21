@@ -682,14 +682,14 @@ def maak_wolken():
     voor_hoogte = 12
 
     while voor_hoogte <= DOEL_POSITIE.y + 40:
-        straal = TOREN_STRAAL + 18 + (int(voor_hoogte / 20) % 3) * 4
+        straal = TOREN_STRAAL + 30 + (int(voor_hoogte / 20) % 3) * 6
         wolk_level = level_nummer_bij_hoogte(voor_hoogte) - 1
-        wolk_kleur = kleur_van_level(wolk_level, 0.9, 235)
+        wolk_kleur = kleur_van_level(wolk_level, 0.58, 90)
         for hoek in (0, 90, 180, 270):
             x = round(cos(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
             z = round(sin(radians(hoek + voor_hoogte * 1.7)) * straal, 2)
-            Entity(model="sphere", shader=unlit_shader, color=wolk_kleur, position=(x, voor_hoogte, z), scale=(11, 4, 7))
-        voor_hoogte += 22
+            Entity(model="sphere", shader=unlit_shader, color=wolk_kleur, position=(x, voor_hoogte, z), scale=(7, 2.5, 5))
+        voor_hoogte += 28
 
 
 def maak_wereld():
