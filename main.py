@@ -1,7 +1,7 @@
 """Wolken Parkour 3D - een lang 3D parkourspel."""
 
 import json
-from math import atan2, cos, degrees, radians, sin
+from math import atan2, cos, degrees, pi, radians, sin
 from pathlib import Path
 from time import perf_counter
 
@@ -46,6 +46,9 @@ LADDER_STAP = 5
 BOOSTPAD_STAP = 4
 BOOSTPAD_COOLDOWN = 0.8
 BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
+COMPUTER_SPELER_SNELHEID = 10.5
+COMPUTER_SPELER_SPRONGHOOGTE = 1.15
+COMPUTER_SPELER_START_VERTAGING = 1.2
 PARCOURS_VOLGORDE = ["springblok", "boost", "ladder", "spiraal", "blokkade", "muurpad"]
 TOREN_STRAAL = 18
 TOREN_STRAAL_VARIATIE = 5.5
@@ -583,6 +586,7 @@ boostpads = []
 ladders = []
 springblokken = []
 checkpoints = []
+computer_spelers = []
 verzamelde_sterren = set()
 actieve_platforms = {}
 actieve_muren = {}
@@ -723,6 +727,95 @@ class ZwevendeSter(Entity):
     def update(self):
         self.rotation_y += 140 * time.dt
         self.y = self.basis_y + 0.18 * sin(perf_counter() * 3 + self.fase)
+
+
+class ComputerSpeler(Entity):
+    """Een hulp-speler die vanzelf de route voordoet."""
+
+    def __init__(self, pad_punten, start_offset, kleur_rgb):
+        super().__init__(
+            model="cube",
+            shader=unlit_shader,
+            color=maak_rgb_kleur(kleur_rgb, 1.1),
+            position=pad_punten[0] + start_offset,
+            scale=(0.9, 1.5, 0.9),
+        )
+        self.pad_punten = pad_punten
+        self.start_offset = start_offset
+        self.start_vertaging = COMPUTER_SPELER_START_VERTAGING
+        self.segment_start = Vec3(self.position.x, self.position.y, self.position.z)
+        self.doel_index = 1
+        self.segment_tijd = 0.5
+        self.segment_voortgang = 0.0
+        self.sprong_hoogte = COMPUTER_SPELER_SPRONGHOOGTE
+        self.wacht_tijd = self.start_vertaging
+        self.klaar = False
+        self.reset()
+
+    def reset(self):
+        """Zet de hulp-speler weer netjes terug naar het begin."""
+        self.position = self.pad_punten[0] + self.start_offset
+        self.segment_start = Vec3(self.position.x, self.position.y, self.position.z)
+        self.doel_index = 1
+        self.segment_voortgang = 0.0
+        self.sprong_hoogte = COMPUTER_SPELER_SPRONGHOOGTE
+        self.wacht_tijd = self.start_vertaging
+        self.klaar = False
+        self.draai_naar(self.pad_punten[self.doel_index])
+        self.bereid_volgende_sprong_voor()
+
+    def draai_naar(self, doel):
+        """Draai de hulp-speler naar het volgende blok."""
+        verschil = doel - self.position
+        if abs(verschil.x) > 0.01 or abs(verschil.z) > 0.01:
+            self.rotation_y = degrees(atan2(verschil.x, verschil.z))
+
+    def bereid_volgende_sprong_voor(self):
+        """Reken uit hoe lang de volgende sprong duurt."""
+        if self.doel_index >= len(self.pad_punten):
+            self.klaar = True
+            self.position = self.pad_punten[-1]
+            return
+
+        doel = self.pad_punten[self.doel_index]
+        afstand = distance(self.segment_start, doel)
+        hoogte_verschil = max(0.0, doel.y - self.segment_start.y)
+        self.segment_tijd = max(0.2, min(0.68, afstand / COMPUTER_SPELER_SNELHEID))
+        self.sprong_hoogte = min(2.8, COMPUTER_SPELER_SPRONGHOOGTE + hoogte_verschil * 0.16 + afstand * 0.035)
+        self.draai_naar(doel)
+
+    def beweeg(self):
+        """Laat de hulp-speler van blok naar blok springen."""
+        if self.klaar:
+            self.y = self.pad_punten[-1].y + 0.18 * sin(perf_counter() * 2.4)
+            return
+
+        if self.wacht_tijd > 0:
+            self.wacht_tijd = max(0.0, self.wacht_tijd - time.dt)
+            return
+
+        doel = self.pad_punten[self.doel_index]
+        self.segment_voortgang = min(1.0, self.segment_voortgang + time.dt / self.segment_tijd)
+        voortgang = self.segment_voortgang
+        basis = self.segment_start + (doel - self.segment_start) * voortgang
+        boog = sin(voortgang * pi) * self.sprong_hoogte
+        self.position = Vec3(basis.x, basis.y + boog, basis.z)
+
+        if voortgang >= 1.0:
+            self.position = doel
+            self.segment_start = Vec3(doel.x, doel.y, doel.z)
+            self.doel_index += 1
+            self.segment_voortgang = 0.0
+            self.bereid_volgende_sprong_voor()
+
+
+def maak_computer_spelers():
+    """Maak een hulp-speler die laat zien dat de toren te halen is."""
+    global computer_spelers
+
+    pad_punten = [vec3_van(data["positie"]) + Vec3(0, 1.15, 0) for data in PLATFORM_DATA]
+    pad_punten.append(Vec3(DOEL_POSITIE.x, DOEL_POSITIE.y + 0.5, DOEL_POSITIE.z))
+    computer_spelers = [ComputerSpeler(pad_punten, Vec3(-2.1, 0, 1.8), (110, 255, 150))]
 
 
 def maak_wolken():
@@ -1163,6 +1256,9 @@ def herstart_spel():
         checkpoint.actief = False
         checkpoint.color = checkpoint.basis_kleur
 
+    for computer_speler in computer_spelers:
+        computer_speler.reset()
+
     maak_sterren_opnieuw()
     zet_speler_terug("Nieuw potje! Klaar voor de superlange baan?")
     bewaar_voortgang()
@@ -1194,6 +1290,7 @@ player.jump_up_duration = 0.42
 player.gravity = 1
 player.cursor.color = color.black
 vernieuw_actieve_baan(force=True)
+maak_computer_spelers()
 
 uitleg_tekst = Text(
     parent=camera.ui,
@@ -1204,6 +1301,7 @@ uitleg_tekst = Text(
         "Rondje omhoog en ladders\n"
         "Fel vlak = snelheidsboost\n"
         "Fel blok = super sprong\n"
+        "Groene helper laat de route zien\n"
         "Spatie langs muur = muursprong\n"
         "Klim helemaal naar boven\n"
         "WASD + muis + spatie\n"
@@ -1237,6 +1335,8 @@ def update():
     global gehaalde_sterren, spawn_punt, gewonnen, eind_tijd, melding_tijd
 
     vernieuw_actieve_baan()
+    for computer_speler in computer_spelers:
+        computer_speler.beweeg()
     klim_ladder()
     gebruik_boostpad()
     gebruik_springblok()
