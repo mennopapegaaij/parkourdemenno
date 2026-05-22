@@ -475,6 +475,18 @@ def bouw_baangegevens():
             elif level >= 20 and stap % 7 == 3:
                 y += 0.25
 
+            if level == 0 and stap == 0:
+                brug_x = round(x / 2, 2)
+                brug_y = round(y / 2, 2)
+                brug_z = round(z / 2, 2)
+                platform_data.append(
+                    {
+                        "positie": (brug_x, brug_y, brug_z),
+                        "schaal": (max(4.2, abs(x) + 2.4), 0.6, max(4.2, abs(z) + 2.4)),
+                        "kleur": maak_rgb_kleur((120, 150, 255), 1.08),
+                    }
+                )
+
             platform_punt = Vec3(x, y, z)
 
             platform_data.append(
