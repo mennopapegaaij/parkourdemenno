@@ -383,7 +383,7 @@ def bouw_baangegevens():
     platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": maak_rgb_kleur((120, 150, 255), 0.95)}]
     muur_data = []
     ladder_data = []
-    boostpad_data = []
+    boostpad_data = [{"positie": (0.0, 0.65, 0.0), "kleur": maak_rgb_kleur((90, 220, 255), 1.2), "level": 0}]
     springblok_data = []
     checkpoint_data = []
     ster_posities = []
