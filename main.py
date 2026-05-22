@@ -380,7 +380,7 @@ def maak_level_profiel(level, moeilijkheid):
 
 def bouw_baangegevens():
     """Bouw een toren van levels die steeds hoger wordt."""
-    platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": kleur_van_level(0, 0.95)}]
+    platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": maak_rgb_kleur((120, 150, 255), 0.95)}]
     muur_data = []
     ladder_data = []
     boostpad_data = []
