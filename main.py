@@ -46,9 +46,10 @@ LADDER_STAP = 5
 BOOSTPAD_STAP = 4
 BOOSTPAD_COOLDOWN = 0.8
 BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
+SPELER_SPRONGHOOGTE = 2.8
 COMPUTER_SPELER_AANTAL = 16
 COMPUTER_SPELER_SNELHEID = 10.5
-COMPUTER_SPELER_SPRONGHOOGTE = 1.15
+COMPUTER_SPELER_SPRONGHOOGTE = SPELER_SPRONGHOOGTE
 COMPUTER_SPELER_START_VERTAGING = 1.2
 PARCOURS_VOLGORDE = ["springblok", "boost", "ladder", "spiraal", "blokkade", "muurpad"]
 TOREN_STRAAL = 18
@@ -780,9 +781,8 @@ class ComputerSpeler(Entity):
 
         doel = self.pad_punten[self.doel_index]
         afstand = distance(self.segment_start, doel)
-        hoogte_verschil = max(0.0, doel.y - self.segment_start.y)
         self.segment_tijd = max(0.2, min(0.68, afstand / COMPUTER_SPELER_SNELHEID))
-        self.sprong_hoogte = min(2.8, COMPUTER_SPELER_SPRONGHOOGTE + hoogte_verschil * 0.16 + afstand * 0.035)
+        self.sprong_hoogte = SPELER_SPRONGHOOGTE
         self.draai_naar(doel)
 
     def beweeg(self):
@@ -1321,7 +1321,7 @@ maak_wereld()
 player = FirstPersonController(position=START_PUNT)
 player.rotation_y = START_ROTATIE_Y
 player.speed = START_SNELHEID
-player.jump_height = 2.8
+player.jump_height = SPELER_SPRONGHOOGTE
 player.jump_up_duration = 0.42
 player.gravity = 1
 player.cursor.color = color.black
