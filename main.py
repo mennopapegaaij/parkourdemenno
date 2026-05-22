@@ -168,18 +168,23 @@ def zij_richting():
 
 
 def begrens_kleur(waarde):
-    """Zorg dat een kleurkanaal netjes tussen 0 en 255 blijft."""
-    return max(0, min(255, int(waarde)))
+    """Zorg dat een kleurkanaal netjes tussen 0.0 en 1.0 blijft."""
+    return max(0.0, min(1.0, float(waarde)))
+
+
+def kleurkanaal_uit_255(waarde):
+    """Zet een kleur van 0-255 om naar een kleur die Ursina goed begrijpt."""
+    return begrens_kleur(waarde / 255)
 
 
 def maak_rgb_kleur(rgb, helderheid=1.0, alpha=255):
     """Maak van een rgb-tuple een kleur met meer of minder licht."""
     rood, groen, blauw = rgb
     return color.rgba(
-        begrens_kleur(rood * helderheid),
-        begrens_kleur(groen * helderheid),
-        begrens_kleur(blauw * helderheid),
-        begrens_kleur(alpha),
+        kleurkanaal_uit_255(rood * helderheid),
+        kleurkanaal_uit_255(groen * helderheid),
+        kleurkanaal_uit_255(blauw * helderheid),
+        kleurkanaal_uit_255(alpha),
     )
 
 
@@ -521,11 +526,11 @@ START_ROTATIE_Y = degrees(atan2(EERSTE_SPRONG_POSITIE.x - START_PUNT.x, EERSTE_S
 app = Ursina()
 window.title = TITEL
 window.borderless = False
-window.color = color.rgb(32, 44, 96)
+window.color = maak_rgb_kleur((32, 44, 96))
 window.exit_button.visible = False
 window.fps_counter.enabled = True
 camera.fov = 95
-camera.clear_color = color.rgb(32, 44, 96)
+camera.clear_color = maak_rgb_kleur((32, 44, 96))
 
 sterren = []
 boostpads = []
@@ -681,7 +686,7 @@ def maak_wolken():
 
 def maak_wereld():
     """Bouw de hele parkourtoren."""
-    AmbientLight(color=color.rgba(180, 180, 220, 120))
+    AmbientLight(color=maak_rgb_kleur((180, 180, 220), alpha=120))
     DirectionalLight(y=25, z=10, rotation=(45, -35, 0))
 
     # Dit is de mist onder de baan. Als je daaronder valt, ga je terug.
