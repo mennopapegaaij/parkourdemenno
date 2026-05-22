@@ -378,12 +378,29 @@ def maak_level_profiel(level, moeilijkheid):
     return basis_stijl, level_kleur, z_pat, y_pat, level_naam, parcours_soort
 
 
+def schaal_voor_boostpad(breedte, diepte):
+    """Maak een snelheidsvlak dat de hele bovenkant van een blok bedekt."""
+    return (breedte, BOOSTPAD_SCHAAL[1], diepte)
+
+
+def schaal_voor_springblok(breedte, diepte):
+    """Maak een springvlak dat de hele bovenkant van een blok bedekt."""
+    return (breedte, SPRINGBLOK_SCHAAL[1], diepte)
+
+
 def bouw_baangegevens():
     """Bouw een toren van levels die steeds hoger wordt."""
     platform_data = [{"positie": (0.0, 0.0, 0.0), "schaal": (STARTPLATFORM_SCHAAL, 1.0, STARTPLATFORM_SCHAAL), "kleur": maak_rgb_kleur((120, 150, 255), 0.95)}]
     muur_data = []
     ladder_data = []
-    boostpad_data = [{"positie": (0.0, 0.65, 0.0), "kleur": maak_rgb_kleur((90, 220, 255), 1.2), "level": 0}]
+    boostpad_data = [
+        {
+            "positie": (0.0, 0.65, 0.0),
+            "schaal": schaal_voor_boostpad(STARTPLATFORM_SCHAAL, STARTPLATFORM_SCHAAL),
+            "kleur": maak_rgb_kleur((90, 220, 255), 1.2),
+            "level": 0,
+        }
+    ]
     springblok_data = []
     checkpoint_data = []
     ster_posities = []
@@ -474,10 +491,24 @@ def bouw_baangegevens():
                     }
                 )
             if heeft_boostpad and stap == BOOSTPAD_STAP:
-                boostpad_data.append({"positie": (x, y + 0.65, z), "kleur": kleur_van_level(level, 1.14), "level": level})
+                boostpad_data.append(
+                    {
+                        "positie": (x, y + 0.65, z),
+                        "schaal": schaal_voor_boostpad(breedte, diepte),
+                        "kleur": kleur_van_level(level, 1.14),
+                        "level": level,
+                    }
+                )
 
             if heeft_springblok and stap == SPRINGBLOK_STAP:
-                springblok_data.append({"positie": (x, y + 0.7, z), "kleur": kleur_van_level(level, 1.22), "level": level})
+                springblok_data.append(
+                    {
+                        "positie": (x, y + 0.7, z),
+                        "schaal": schaal_voor_springblok(breedte, diepte),
+                        "kleur": kleur_van_level(level, 1.22),
+                        "level": level,
+                    }
+                )
                 grote_sprong_stappen = 2
             elif grote_sprong_stappen > 0:
                 grote_sprong_stappen -= 1
@@ -596,14 +627,14 @@ def maak_muur(positie, schaal, kleur_blok):
     return muur
 
 
-def maak_springblok(positie, kleur_blok):
+def maak_springblok(positie, schaal, kleur_blok):
     """Maak een fel blok dat je extra ver omhoog schiet."""
     blok = Entity(
         model="cube",
         shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
-        scale=SPRINGBLOK_SCHAAL,
+        scale=schaal,
         collider="box",
     )
     blok.is_muur = False
@@ -624,14 +655,14 @@ def maak_ladder(positie, schaal, kleur_blok):
     return ladder
 
 
-def maak_boostpad(positie, kleur_blok):
+def maak_boostpad(positie, schaal, kleur_blok):
     """Maak een fel snelheidsvlak dat je vooruit duwt."""
     pad = Entity(
         model="cube",
         shader=unlit_shader,
         color=kleur_blok,
         position=vec3_van(positie),
-        scale=BOOSTPAD_SCHAAL,
+        scale=schaal,
         collider="box",
     )
     pad.is_muur = False
@@ -731,10 +762,10 @@ def maak_wereld():
         ladders.append(maak_ladder(ladder_info["positie"], ladder_info["schaal"], ladder_info["kleur"]))
 
     for boostpad_info in BOOSTPAD_DATA:
-        boostpads.append(maak_boostpad(boostpad_info["positie"], boostpad_info["kleur"]))
+        boostpads.append(maak_boostpad(boostpad_info["positie"], boostpad_info["schaal"], boostpad_info["kleur"]))
 
     for springblok_info in SPRINGBLOK_DATA:
-        springblokken.append(maak_springblok(springblok_info["positie"], springblok_info["kleur"]))
+        springblokken.append(maak_springblok(springblok_info["positie"], springblok_info["schaal"], springblok_info["kleur"]))
 
     # Deze vlag laat zien waar het einde van de toren is.
     Entity(
@@ -961,6 +992,15 @@ def toon_melding(tekst, duur=2.4):
     melding_tijd = duur
 
 
+def speler_staat_op_vlak(speler_punt, vlak, marge=0.2):
+    """Kijk of de speler ergens op het speciale vlak staat."""
+    return (
+        abs(speler_punt.x - vlak.x) <= vlak.scale_x / 2 + marge
+        and abs(speler_punt.z - vlak.z) <= vlak.scale_z / 2 + marge
+        and abs(speler_punt.y - vlak.y) <= 1.5
+    )
+
+
 def gebruik_springblok():
     """Schiet de speler omhoog en vooruit vanaf een fel blok."""
     global laatste_springblok_tijd
@@ -972,7 +1012,7 @@ def gebruik_springblok():
         return
 
     for springblok in springblokken:
-        if distance(speler_hoogte, springblok.position) < 1.4:
+        if speler_staat_op_vlak(speler_hoogte, springblok):
             richting = kijk_richting()
             player.position = player.position + Vec3(richting.x * 5.0, 4.2, richting.z * 5.0)
             player.air_time = 0
@@ -993,7 +1033,7 @@ def gebruik_boostpad():
         return
 
     for boostpad in boostpads:
-        if distance(speler_hoogte, boostpad.position) < 1.6:
+        if speler_staat_op_vlak(speler_hoogte, boostpad):
             richting = kijk_richting()
             player.position = player.position + Vec3(richting.x * 7.5, 1.0, richting.z * 7.5)
             player.air_time = 0
