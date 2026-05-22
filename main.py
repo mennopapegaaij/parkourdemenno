@@ -26,7 +26,7 @@ from ursina.prefabs.first_person_controller import FirstPersonController
 from ursina.shaders import unlit_shader
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 10
+BAAN_VERSIE = 11
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
@@ -475,6 +475,8 @@ def bouw_baangegevens():
             elif level >= 20 and stap % 7 == 3:
                 y += 0.25
 
+            y = min(y, vorig_platform_punt.y + SPELER_SPRONGHOOGTE)
+
             if level == 0 and stap == 0:
                 brug_x = round(x / 2, 2)
                 brug_y = round(y / 2, 2)
@@ -546,7 +548,7 @@ def bouw_baangegevens():
 
     finish_radius = TOREN_STRAAL * 0.35
     finish_x = round(cos(radians(huidige_hoek + 35)) * finish_radius, 2)
-    finish_y = y + 8.0
+    finish_y = y + SPELER_SPRONGHOOGTE
     finish_z = round(sin(radians(huidige_hoek + 35)) * finish_radius, 2)
     top_kleur = kleur_van_level(AANTAL_LEVELS - 1, 1.18)
 
