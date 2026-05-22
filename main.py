@@ -3,6 +3,7 @@
 import json
 from math import atan2, cos, degrees, pi, radians, sin
 from pathlib import Path
+from random import Random
 from time import perf_counter
 
 from ursina import (
@@ -48,7 +49,7 @@ BOOSTPAD_COOLDOWN = 0.8
 BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
 SPELER_SPRONGHOOGTE = 2.8
 COMPUTER_SPELER_AANTAL = 16
-COMPUTER_SPELER_SNELHEID = 10.5
+COMPUTER_SPELER_SNELHEID = 8.2
 COMPUTER_SPELER_SPRONGHOOGTE = SPELER_SPRONGHOOGTE
 COMPUTER_SPELER_START_VERTAGING = 1.2
 PARCOURS_VOLGORDE = ["springblok", "boost", "ladder", "spiraal", "blokkade", "muurpad"]
@@ -745,10 +746,27 @@ class ZwevendeSter(Entity):
         self.y = self.basis_y + 0.18 * sin(perf_counter() * 3 + self.fase)
 
 
+def maak_helper_profiel(index):
+    """Geef elke helper een eigen manier van bewegen."""
+    snelheid = [0.72, 0.78, 0.84, 0.9, 0.76, 0.82, 0.88]
+    extra_pauze = [0.02, 0.08, 0.14, 0.2, 0.05, 0.11, 0.17]
+    zijstap = [0.0, 0.16, -0.2, 0.24, -0.1, 0.12, -0.15]
+    boost = [1.18, 1.28, 1.38, 1.22, 1.48, 1.32, 1.42]
+    val_kans = [0.0, 0.001, 0.0016, 0.0008, 0.0022, 0.0012, 0.0018]
+    stijl = index % len(snelheid)
+    return {
+        "snelheid_factor": snelheid[stijl],
+        "extra_pauze": extra_pauze[stijl],
+        "zijstap": zijstap[stijl],
+        "boost_factor": boost[stijl],
+        "val_kans": val_kans[stijl],
+    }
+
+
 class ComputerSpeler(Entity):
     """Een hulp-speler die vanzelf de route voordoet."""
 
-    def __init__(self, pad_punten, start_offset, kleur_rgb, extra_vertaging=0.0):
+    def __init__(self, nummer, pad_punten, start_offset, kleur_rgb, extra_vertaging=0.0):
         super().__init__(
             model="cube",
             shader=unlit_shader,
@@ -756,26 +774,46 @@ class ComputerSpeler(Entity):
             position=pad_punten[0] + start_offset,
             scale=(0.9, 1.5, 0.9),
         )
+        self.nummer = nummer
         self.pad_punten = pad_punten
         self.start_offset = start_offset
+        self.profiel = maak_helper_profiel(nummer)
         self.start_vertaging = COMPUTER_SPELER_START_VERTAGING + extra_vertaging
+        self.rng = Random(7000 + nummer)
+        self.basis_snelheid = COMPUTER_SPELER_SNELHEID * self.profiel["snelheid_factor"]
+        self.boost_factor = self.profiel["boost_factor"]
+        self.extra_pauze = self.profiel["extra_pauze"]
+        self.zijstap = self.profiel["zijstap"]
+        self.val_kans = self.profiel["val_kans"]
         self.segment_start = Vec3(self.position.x, self.position.y, self.position.z)
         self.doel_index = 1
         self.segment_tijd = 0.5
         self.segment_voortgang = 0.0
         self.sprong_hoogte = COMPUTER_SPELER_SPRONGHOOGTE
         self.wacht_tijd = self.start_vertaging
+        self.laatste_veilige_plek = Vec3(self.position.x, self.position.y, self.position.z)
+        self.boost_stappen = 0
+        self.valt = False
+        self.val_snelheid = 0.0
+        self.val_richting = Vec3(0, 0, 0)
         self.klaar = False
         self.reset()
 
     def reset(self):
         """Zet de hulp-speler weer netjes terug naar het begin."""
+        self.rng.seed(7000 + self.nummer)
         self.position = self.pad_punten[0] + self.start_offset
         self.segment_start = Vec3(self.position.x, self.position.y, self.position.z)
         self.doel_index = 1
         self.segment_voortgang = 0.0
         self.sprong_hoogte = COMPUTER_SPELER_SPRONGHOOGTE
-        self.wacht_tijd = self.start_vertaging
+        self.wacht_tijd = self.start_vertaging + self.extra_pauze
+        self.laatste_veilige_plek = Vec3(self.position.x, self.position.y, self.position.z)
+        self.boost_stappen = 0
+        self.valt = False
+        self.val_snelheid = 0.0
+        self.val_richting = Vec3(0, 0, 0)
+        self.rotation_z = 0
         self.klaar = False
         self.draai_naar(self.pad_punten[self.doel_index])
         self.bereid_volgende_sprong_voor()
@@ -795,14 +833,67 @@ class ComputerSpeler(Entity):
 
         doel = self.pad_punten[self.doel_index]
         afstand = distance(self.segment_start, doel)
-        self.segment_tijd = max(0.2, min(0.68, afstand / COMPUTER_SPELER_SNELHEID))
+        snelheid = self.basis_snelheid
+        if self.boost_stappen > 0:
+            snelheid *= self.boost_factor
+            self.boost_stappen -= 1
+
+        self.segment_tijd = max(0.3, min(1.15, afstand / snelheid))
         self.sprong_hoogte = SPELER_SPRONGHOOGTE
         self.draai_naar(doel)
+
+    def krijgt_boost(self):
+        """Kijk of de helper op een snelheidsvlak staat."""
+        punt = self.position + Vec3(0, 0.2, 0)
+        for boostpad in boostpads:
+            if speler_staat_op_vlak(punt, boostpad, 0.05):
+                self.boost_stappen = max(self.boost_stappen, 2)
+                return True
+        return False
+
+    def moet_vallen(self):
+        """Sommige helpers glijden soms van een blok af."""
+        return self.doel_index > 4 and self.doel_index < len(self.pad_punten) - 2 and self.rng.random() < self.val_kans
+
+    def start_val(self):
+        """Laat de helper expres even vallen."""
+        self.valt = True
+        self.val_snelheid = 0.6
+        richting = normaliseer_richting(self.rng.uniform(-1.0, 1.0), self.rng.uniform(-1.0, 1.0))
+        self.val_richting = richting
+        self.rotation_z = 0
+
+    def herstel_na_val(self):
+        """Zet de helper terug op zijn laatste veilige blok."""
+        self.valt = False
+        self.position = Vec3(
+            self.laatste_veilige_plek.x + self.start_offset.x * 0.12,
+            self.laatste_veilige_plek.y,
+            self.laatste_veilige_plek.z + self.start_offset.z * 0.12,
+        )
+        self.segment_start = Vec3(self.position.x, self.position.y, self.position.z)
+        self.segment_voortgang = 0.0
+        self.wacht_tijd = 0.6 + self.extra_pauze
+        self.val_snelheid = 0.0
+        self.rotation_z = 0
+        self.bereid_volgende_sprong_voor()
 
     def beweeg(self):
         """Laat de hulp-speler van blok naar blok springen."""
         if self.klaar:
             self.y = self.pad_punten[-1].y + 0.18 * sin(perf_counter() * 2.4)
+            return
+
+        if self.valt:
+            self.val_snelheid += 11 * time.dt
+            self.position = self.position + Vec3(
+                self.val_richting.x * 2.6 * time.dt,
+                -self.val_snelheid * time.dt,
+                self.val_richting.z * 2.6 * time.dt,
+            )
+            self.rotation_z = min(80, self.rotation_z + 220 * time.dt)
+            if self.position.y < self.laatste_veilige_plek.y - 7:
+                self.herstel_na_val()
             return
 
         if self.wacht_tijd > 0:
@@ -814,13 +905,26 @@ class ComputerSpeler(Entity):
         voortgang = self.segment_voortgang
         basis = self.segment_start + (doel - self.segment_start) * voortgang
         boog = sin(voortgang * pi) * self.sprong_hoogte
-        self.position = Vec3(basis.x, basis.y + boog, basis.z)
+        richting = normaliseer_richting(doel.x - self.segment_start.x, doel.z - self.segment_start.z)
+        zijkant = Vec3(-richting.z, 0, richting.x)
+        zijzwaai = sin(voortgang * pi) * self.zijstap
+        self.position = Vec3(
+            basis.x + zijkant.x * zijzwaai,
+            basis.y + boog,
+            basis.z + zijkant.z * zijzwaai,
+        )
 
         if voortgang >= 1.0:
             self.position = doel
+            self.laatste_veilige_plek = Vec3(doel.x, doel.y, doel.z)
             self.segment_start = Vec3(doel.x, doel.y, doel.z)
             self.doel_index += 1
             self.segment_voortgang = 0.0
+            self.krijgt_boost()
+            if self.moet_vallen():
+                self.start_val()
+                return
+            self.wacht_tijd = self.extra_pauze * (0.5 + self.rng.random())
             self.bereid_volgende_sprong_voor()
 
 
@@ -859,6 +963,7 @@ def maak_computer_spelers():
     ]
     computer_spelers = [
         ComputerSpeler(
+            index,
             pad_punten,
             start_vakken[index],
             helper_kleuren[index % len(helper_kleuren)],
