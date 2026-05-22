@@ -47,6 +47,8 @@ LADDER_STAP = 5
 BOOSTPAD_STAP = 4
 BOOSTPAD_COOLDOWN = 0.8
 BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
+PIJLTJES_DRAAI_SNELHEID = 150
+PIJLTJES_KIJK_SNELHEID = 95
 SPELER_SPRONGHOOGTE = 2.8
 COMPUTER_SPELER_AANTAL = 16
 COMPUTER_SPELER_SNELHEID = 8.2
@@ -1434,6 +1436,24 @@ def update_status():
     )
 
 
+def draai_met_pijltjes():
+    """Laat de pijltjes de speler draaien en omhoog of omlaag kijken."""
+    if held_keys["left arrow"]:
+        player.rotation_y -= PIJLTJES_DRAAI_SNELHEID * time.dt
+    if held_keys["right arrow"]:
+        player.rotation_y += PIJLTJES_DRAAI_SNELHEID * time.dt
+    if held_keys["up arrow"]:
+        player.camera_pivot.rotation_x = max(
+            -85,
+            player.camera_pivot.rotation_x - PIJLTJES_KIJK_SNELHEID * time.dt,
+        )
+    if held_keys["down arrow"]:
+        player.camera_pivot.rotation_x = min(
+            85,
+            player.camera_pivot.rotation_x + PIJLTJES_KIJK_SNELHEID * time.dt,
+        )
+
+
 maak_wereld()
 
 # De speler kijkt in first person, alsof je zelf in het spel staat.
@@ -1459,7 +1479,7 @@ uitleg_tekst = Text(
         "Helpers laten de route zien\n"
         "Spatie langs muur = muursprong\n"
         "Klim helemaal naar boven\n"
-        "WASD + muis + spatie\n"
+        "WASD + muis of pijltjes + spatie\n"
         "R = opnieuw"
     ),
     x=-0.86,
@@ -1489,6 +1509,7 @@ def update():
     """Deze functie draait steeds opnieuw terwijl het spel loopt."""
     global gehaalde_sterren, spawn_punt, gewonnen, eind_tijd, melding_tijd
 
+    draai_met_pijltjes()
     vernieuw_actieve_baan()
     for computer_speler in computer_spelers:
         computer_speler.beweeg()
