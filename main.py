@@ -46,6 +46,7 @@ LADDER_STAP = 5
 BOOSTPAD_STAP = 4
 BOOSTPAD_COOLDOWN = 0.8
 BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
+COMPUTER_SPELER_AANTAL = 16
 COMPUTER_SPELER_SNELHEID = 10.5
 COMPUTER_SPELER_SPRONGHOOGTE = 1.15
 COMPUTER_SPELER_START_VERTAGING = 1.2
@@ -732,7 +733,7 @@ class ZwevendeSter(Entity):
 class ComputerSpeler(Entity):
     """Een hulp-speler die vanzelf de route voordoet."""
 
-    def __init__(self, pad_punten, start_offset, kleur_rgb):
+    def __init__(self, pad_punten, start_offset, kleur_rgb, extra_vertaging=0.0):
         super().__init__(
             model="cube",
             shader=unlit_shader,
@@ -742,7 +743,7 @@ class ComputerSpeler(Entity):
         )
         self.pad_punten = pad_punten
         self.start_offset = start_offset
-        self.start_vertaging = COMPUTER_SPELER_START_VERTAGING
+        self.start_vertaging = COMPUTER_SPELER_START_VERTAGING + extra_vertaging
         self.segment_start = Vec3(self.position.x, self.position.y, self.position.z)
         self.doel_index = 1
         self.segment_tijd = 0.5
@@ -810,12 +811,47 @@ class ComputerSpeler(Entity):
 
 
 def maak_computer_spelers():
-    """Maak een hulp-speler die laat zien dat de toren te halen is."""
+    """Maak hulp-spelers die laten zien dat de toren te halen is."""
     global computer_spelers
 
     pad_punten = [vec3_van(data["positie"]) + Vec3(0, 1.15, 0) for data in PLATFORM_DATA]
     pad_punten.append(Vec3(DOEL_POSITIE.x, DOEL_POSITIE.y + 0.5, DOEL_POSITIE.z))
-    computer_spelers = [ComputerSpeler(pad_punten, Vec3(-2.1, 0, 1.8), (110, 255, 150))]
+    start_vakken = [
+        Vec3(-3.0, 0, -3.0),
+        Vec3(-1.0, 0, -3.0),
+        Vec3(1.0, 0, -3.0),
+        Vec3(3.0, 0, -3.0),
+        Vec3(-3.0, 0, -1.0),
+        Vec3(-1.0, 0, -1.0),
+        Vec3(1.0, 0, -1.0),
+        Vec3(3.0, 0, -1.0),
+        Vec3(-3.0, 0, 1.0),
+        Vec3(-1.0, 0, 1.0),
+        Vec3(1.0, 0, 1.0),
+        Vec3(3.0, 0, 1.0),
+        Vec3(-3.0, 0, 3.0),
+        Vec3(-1.0, 0, 3.0),
+        Vec3(1.0, 0, 3.0),
+        Vec3(3.0, 0, 3.0),
+    ]
+    helper_kleuren = [
+        (110, 255, 150),
+        (90, 220, 255),
+        (120, 150, 255),
+        (220, 120, 255),
+        (255, 220, 80),
+        (255, 160, 70),
+        (255, 90, 90),
+    ]
+    computer_spelers = [
+        ComputerSpeler(
+            pad_punten,
+            start_vakken[index],
+            helper_kleuren[index % len(helper_kleuren)],
+            index * 0.18,
+        )
+        for index in range(COMPUTER_SPELER_AANTAL)
+    ]
 
 
 def maak_wolken():
@@ -1301,7 +1337,7 @@ uitleg_tekst = Text(
         "Rondje omhoog en ladders\n"
         "Fel vlak = snelheidsboost\n"
         "Fel blok = super sprong\n"
-        "Groene helper laat de route zien\n"
+        "Helpers laten de route zien\n"
         "Spatie langs muur = muursprong\n"
         "Klim helemaal naar boven\n"
         "WASD + muis + spatie\n"
