@@ -26,7 +26,7 @@ from ursina.prefabs.first_person_controller import FirstPersonController
 from ursina.shaders import unlit_shader
 
 TITEL = "Wolken Parkour 3D"
-BAAN_VERSIE = 9
+BAAN_VERSIE = 10
 START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
@@ -112,6 +112,12 @@ BEGIN_GAP = 1.8
 EIND_GAP = 3.1
 STARTPLATFORM_SCHAAL = 9.0
 FINISH_PLATFORM_SCHAAL = 12.0
+
+# Deze hulpgetallen maken de hele toren vriendelijker van begin tot eind.
+SPRONG_HULP_BREEDER = 1.22
+SPRONG_HULP_KLEINER_GAT = 0.72
+SPRONG_HULP_MINDER_HOOGTE = 0.68
+SPRONG_HULP_MINDER_ZIJ = 0.86
 
 MOEILIJKHEID_NAMEN = [
     "heel makkelijk",
@@ -306,10 +312,10 @@ def maak_level_profiel(level, moeilijkheid):
     draai_hoogte = (level + basis_stijl) % len(hoogte_basis)
 
     spiegel = variant % 2 == 1
-    z_schaal = 0.82 + moeilijkheid * 0.55 + (variant % 4) * 0.08
-    mix_schaal = 0.18 + (variant % 3) * 0.06
-    y_schaal = 1.35 + moeilijkheid * 2.45 + (variant % 3) * 0.3
-    hoogte_schaal = 0.5 + moeilijkheid * 0.85 + (variant % 4) * 0.14
+    z_schaal = (0.82 + moeilijkheid * 0.55 + (variant % 4) * 0.08) * SPRONG_HULP_MINDER_ZIJ
+    mix_schaal = (0.18 + (variant % 3) * 0.06) * SPRONG_HULP_MINDER_ZIJ
+    y_schaal = (1.35 + moeilijkheid * 2.45 + (variant % 3) * 0.3) * SPRONG_HULP_MINDER_HOOGTE
+    hoogte_schaal = (0.5 + moeilijkheid * 0.85 + (variant % 4) * 0.14) * SPRONG_HULP_MINDER_HOOGTE
 
     z_pat = []
     y_pat = []
@@ -326,9 +332,9 @@ def maak_level_profiel(level, moeilijkheid):
         y_waarde = y_basis[(stap + draai_y) % len(y_basis)] * y_schaal
         hoogte_waarde = hoogte_basis[(stap + draai_hoogte) % len(hoogte_basis)] * hoogte_schaal
         if variant % 3 == 2 and stap in (2, 6, 10):
-            hoogte_waarde += 0.8 + moeilijkheid * 0.9
+            hoogte_waarde += (0.8 + moeilijkheid * 0.9) * SPRONG_HULP_MINDER_HOOGTE
         if variant % 4 == 1 and stap in (4, 8, 11):
-            hoogte_waarde -= 0.7 + moeilijkheid * 0.8
+            hoogte_waarde -= (0.7 + moeilijkheid * 0.8) * SPRONG_HULP_MINDER_HOOGTE
         y_pat.append(round(y_waarde + hoogte_waarde, 2))
 
     level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} {STIJL_NAMEN[basis_stijl]}"
@@ -337,29 +343,36 @@ def maak_level_profiel(level, moeilijkheid):
     if parcours_soort == "spiraal":
         draai = -1 if variant % 2 else 1
         spiraal_z = [0.0, 1.4, 3.0, 4.8, 5.8, 4.8, 3.0, 0.0, -3.0, -4.8, -5.8, -4.8, -3.0]
-        klim = 1.2 + moeilijkheid * 0.8
-        z_pat = [round(waarde * draai, 2) for waarde in spiraal_z]
-        y_pat = [round(stap * klim + sin(stap * 0.7) * (0.5 + moeilijkheid * 0.3), 2) for stap in range(SPRONGEN_PER_LEVEL)]
+        klim = (1.2 + moeilijkheid * 0.8) * SPRONG_HULP_MINDER_HOOGTE
+        z_pat = [round(waarde * draai * SPRONG_HULP_MINDER_ZIJ, 2) for waarde in spiraal_z]
+        y_pat = [
+            round(
+                stap * klim
+                + sin(stap * 0.7) * (0.5 + moeilijkheid * 0.3) * SPRONG_HULP_MINDER_HOOGTE,
+                2,
+            )
+            for stap in range(SPRONGEN_PER_LEVEL)
+        ]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} rondje omhoog"
     elif parcours_soort == "ladder":
         z_pat = [0.0, 0.3, 0.8, 0.9, 0.5, 0.2, 0.0, -0.2, -0.5, -0.4, 0.0, 0.4, 0.0]
         y_pat = [0.0, 0.7, 1.3, 1.8, 2.2, 5.0, 6.5, 7.6, 8.6, 9.2, 10.1, 10.9, 11.7]
-        y_pat = [round(waarde * (0.75 + moeilijkheid * 0.45), 2) for waarde in y_pat]
+        y_pat = [round(waarde * (0.75 + moeilijkheid * 0.45) * SPRONG_HULP_MINDER_HOOGTE, 2) for waarde in y_pat]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} ladder klim"
     elif parcours_soort == "boost":
         z_pat = [0.0, 0.8, 1.8, 3.2, 1.6, 0.0, -1.6, -3.2, -1.8, -0.8, 0.0, 1.4, 0.0]
         y_pat = [0.0, 0.4, 1.0, 1.4, 1.0, 0.4, 0.1, 0.8, 1.5, 2.3, 3.0, 2.0, 1.2]
-        y_pat = [round(waarde * (0.8 + moeilijkheid * 0.35), 2) for waarde in y_pat]
+        y_pat = [round(waarde * (0.8 + moeilijkheid * 0.35) * SPRONG_HULP_MINDER_HOOGTE, 2) for waarde in y_pat]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} snelheidsbaan"
     elif parcours_soort == "blokkade":
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} muurroute"
     elif parcours_soort == "springblok":
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} springblokbaan"
     elif parcours_soort == "muurpad":
-        z_pat = [4.6, 5.0, 5.4, 5.8, 5.8, 5.4, 5.0, 4.6, 4.2, 4.6, 5.0, 5.4, 5.8]
+        z_pat = [waarde * SPRONG_HULP_MINDER_ZIJ for waarde in [4.6, 5.0, 5.4, 5.8, 5.8, 5.4, 5.0, 4.6, 4.2, 4.6, 5.0, 5.4, 5.8]]
         if variant % 2 == 1:
             z_pat = [-waarde for waarde in z_pat]
-        y_pat = [round(waarde * (0.85 + moeilijkheid * 0.4), 2) for waarde in y_pat]
+        y_pat = [round(waarde * (0.85 + moeilijkheid * 0.4) * SPRONG_HULP_MINDER_HOOGTE, 2) for waarde in y_pat]
         level_naam = f"{LEVEL_BIJVOEGLIJK[(level + variant) % len(LEVEL_BIJVOEGLIJK)]} muurpad"
 
     return basis_stijl, level_kleur, z_pat, y_pat, level_naam, parcours_soort
@@ -393,24 +406,26 @@ def bouw_baangegevens():
         heeft_muurpad = parcours_soort == "muurpad"
         grote_sprong_stappen = 0
         basis_y = level * 7.2 + (level // 6) * 2.2
-        basis_breedte = BEGIN_SCHAAL[0] + (EIND_SCHAAL[0] - BEGIN_SCHAAL[0]) * moeilijkheid
-        basis_diepte = BEGIN_SCHAAL[1] + (EIND_SCHAAL[1] - BEGIN_SCHAAL[1]) * moeilijkheid
+        basis_breedte = (BEGIN_SCHAAL[0] + (EIND_SCHAAL[0] - BEGIN_SCHAAL[0]) * moeilijkheid) * SPRONG_HULP_BREEDER
+        basis_diepte = (BEGIN_SCHAAL[1] + (EIND_SCHAAL[1] - BEGIN_SCHAAL[1]) * moeilijkheid) * SPRONG_HULP_BREEDER
         vorige_positie_in_level = None
 
         for stap in range(SPRONGEN_PER_LEVEL):
             wereld_stap = level * SPRONGEN_PER_LEVEL + stap + 1
 
-            breedte = max(2.1, basis_breedte - (stap % 4) * 0.08)
-            diepte = max(2.2, basis_diepte - (stap % 3) * 0.06)
-            gap = BEGIN_GAP + (EIND_GAP - BEGIN_GAP) * moeilijkheid + (stap % 3) * 0.12
+            breedte = max(2.8, basis_breedte - (stap % 4) * 0.06)
+            diepte = max(2.9, basis_diepte - (stap % 3) * 0.05)
+            gap = (
+                BEGIN_GAP + (EIND_GAP - BEGIN_GAP) * moeilijkheid + (stap % 3) * 0.12
+            ) * SPRONG_HULP_KLEINER_GAT
             extra_hoogte = 0.0
 
             if grote_sprong_stappen > 0:
-                gap += 1.0
-                extra_hoogte = 0.7 if grote_sprong_stappen == 2 else 0.35
+                gap += 0.55
+                extra_hoogte = 0.45 if grote_sprong_stappen == 2 else 0.22
 
             if heeft_boostpad and stap in (BOOSTPAD_STAP + 1, BOOSTPAD_STAP + 2):
-                gap += 1.0
+                gap += 0.5
             hoek_stap = TOREN_HOEK_BASIS + gap * 2.1
             if heeft_ladder and stap >= LADDER_STAP:
                 hoek_stap *= 0.78
@@ -432,11 +447,11 @@ def bouw_baangegevens():
                 z = round(sin(midden_hoek) * blokkade_radius, 2)
 
             if level >= 80 and stap % 11 == 5:
-                y += 1.4
+                y += 0.75
             elif level >= 45 and stap % 9 == 4:
-                y += 0.9
+                y += 0.5
             elif level >= 20 and stap % 7 == 3:
-                y += 0.45
+                y += 0.25
 
             platform_punt = Vec3(x, y, z)
 
