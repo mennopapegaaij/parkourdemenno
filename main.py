@@ -6,11 +6,13 @@ from pathlib import Path
 from random import Random
 from time import perf_counter
 
+from PIL import Image, ImageDraw
 from ursina import (
     AmbientLight,
     DirectionalLight,
     Entity,
     Text,
+    Texture,
     Ursina,
     Vec3,
     camera,
@@ -35,6 +37,8 @@ OPSLAG_BESTAND = Path(__file__).with_name("savegame.json")
 OBBY_LUCHT_KLEUR = (120, 205, 255)
 OBBY_BASISPLAAT_KLEUR = (110, 195, 95)
 OBBY_SPAWN_KLEUR = (240, 240, 240)
+TEXTUUR_PIXELS = 64
+TEXTUUR_VAK = 8
 LAAD_HOOGTE_BOVEN = 90
 LAAD_HOOGTE_ONDER = 55
 LAAD_VERNIEUW_HOOGTE = 14
@@ -210,6 +214,82 @@ def maak_rgb_kleur(rgb, helderheid=1.0, alpha=255):
 def kleur_van_level(level_nummer, helderheid=1.0, alpha=255):
     """Geef elk level een kleur uit de regenboog."""
     return maak_rgb_kleur(REGENBOOG_RGB[level_nummer % len(REGENBOOG_RGB)], helderheid, alpha)
+
+
+TEXTUUR_CACHE = {}
+
+
+def maak_rgb_tuple(kleur_of_rgb):
+    """Maak van een kleur of tuple altijd een gewone rgb-tuple."""
+    if hasattr(kleur_of_rgb, "rgb32"):
+        return tuple(int(waarde) for waarde in kleur_of_rgb.rgb32)
+    return tuple(int(waarde) for waarde in kleur_of_rgb[:3])
+
+
+def pas_rgb_aan(rgb, factor):
+    """Maak een rgb-kleur wat lichter of donkerder."""
+    return tuple(max(0, min(255, int(kanaal * factor))) for kanaal in rgb)
+
+
+def teken_pixel_vakjes(draw, basis_rgb, stijl):
+    """Teken een simpele 64x64 pixel-textuur."""
+    licht = pas_rgb_aan(basis_rgb, 1.12)
+    donker = pas_rgb_aan(basis_rgb, 0.82)
+    extra_donker = pas_rgb_aan(basis_rgb, 0.62)
+    extra_licht = pas_rgb_aan(basis_rgb, 1.28)
+
+    for y in range(0, TEXTUUR_PIXELS, TEXTUUR_VAK):
+        for x in range(0, TEXTUUR_PIXELS, TEXTUUR_VAK):
+            vak_x = x // TEXTUUR_VAK
+            vak_y = y // TEXTUUR_VAK
+            vak_kleur = licht if (vak_x + vak_y) % 2 == 0 else donker
+
+            if stijl == "boost" and (vak_x + vak_y) % 3 == 0:
+                vak_kleur = extra_licht
+            elif stijl == "spring" and abs(vak_x - 3.5) + abs(vak_y - 3.5) < 2.6:
+                vak_kleur = extra_licht
+            elif stijl == "ladder" and vak_x in (1, 6):
+                vak_kleur = extra_donker
+            elif stijl == "ladder" and vak_y in (1, 3, 5):
+                vak_kleur = extra_licht
+            elif stijl == "checkpoint" and (vak_x in (1, 6) or vak_y in (1, 6)):
+                vak_kleur = extra_licht
+            elif stijl == "grond" and vak_y < 2:
+                vak_kleur = extra_licht
+            elif stijl == "spawn" and (vak_x in (0, 7) or vak_y in (0, 7)):
+                vak_kleur = extra_donker
+            elif stijl == "lava" and (vak_x - vak_y) % 3 == 0:
+                vak_kleur = extra_licht
+            elif stijl == "speler-kleding" and vak_y in (2, 5):
+                vak_kleur = extra_licht
+            elif stijl == "speler-broek" and vak_x in (2, 5):
+                vak_kleur = extra_donker
+            elif stijl == "speler-huid" and vak_y in (0, 7):
+                vak_kleur = licht
+            elif stijl == "finish" and vak_x in (0, 1, 6, 7):
+                vak_kleur = extra_licht
+
+            draw.rectangle(
+                [x, y, x + TEXTUUR_VAK - 1, y + TEXTUUR_VAK - 1],
+                fill=vak_kleur + (255,),
+            )
+
+    draw.rectangle([0, 0, TEXTUUR_PIXELS - 1, TEXTUUR_PIXELS - 1], outline=extra_donker + (255,), width=2)
+
+
+def maak_pixel_textuur(kleur_of_rgb, stijl="blok"):
+    """Maak een pixelige 64x64 textuur voor een blok of spelerdeel."""
+    basis_rgb = maak_rgb_tuple(kleur_of_rgb)
+    sleutel = (basis_rgb, stijl)
+    if sleutel in TEXTUUR_CACHE:
+        return TEXTUUR_CACHE[sleutel]
+
+    plaatje = Image.new("RGBA", (TEXTUUR_PIXELS, TEXTUUR_PIXELS), basis_rgb + (255,))
+    draw = ImageDraw.Draw(plaatje)
+    teken_pixel_vakjes(draw, basis_rgb, stijl)
+    textuur = Texture(plaatje, filtering=None)
+    TEXTUUR_CACHE[sleutel] = textuur
+    return textuur
 
 
 def voeg_muren_toe(muur_data, level_nummer, stijl, x, y, breedte, gap, z):
@@ -627,49 +707,50 @@ laatste_springblok_tijd = 0.0
 laatste_muursprong_tijd = 0.0
 
 
-def maak_obby_deel(positie, schaal, kleur_blok, top_helder=0.16, rand_donker=-0.12):
-    """Maak een simpel obby-blok zonder lichte bovenkant."""
+def maak_obby_deel(positie, schaal, kleur_blok, textuur_stijl="blok"):
+    """Maak een simpel obby-blok met een 64x64 pixel-textuur."""
     return Entity(
         model="cube",
         shader=unlit_shader,
-        color=kleur_blok,
+        color=color.white,
         position=vec3_van(positie),
         scale=schaal,
+        texture=maak_pixel_textuur(kleur_blok, textuur_stijl),
         collider="box",
     )
 
 
 def maak_platform(positie, schaal, kleur_blok):
     """Maak een springblok waar de speler op kan landen."""
-    blok = maak_obby_deel(positie, schaal, kleur_blok, 0.2, -0.16)
+    blok = maak_obby_deel(positie, schaal, kleur_blok, "blok")
     blok.is_muur = False
     return blok
 
 
 def maak_muur(positie, schaal, kleur_blok):
     """Maak een hoge muur langs de springroute."""
-    muur = maak_obby_deel(positie, schaal, kleur_blok, 0.08, -0.2)
+    muur = maak_obby_deel(positie, schaal, kleur_blok, "muur")
     muur.is_muur = True
     return muur
 
 
 def maak_springblok(positie, schaal, kleur_blok):
     """Maak een fel blok dat je extra ver omhoog schiet."""
-    blok = maak_obby_deel(positie, schaal, kleur_blok, 0.28, -0.08)
+    blok = maak_obby_deel(positie, schaal, kleur_blok, "spring")
     blok.is_muur = False
     return blok
 
 
 def maak_ladder(positie, schaal, kleur_blok):
     """Maak een ladder waar je omhoog kunt klimmen."""
-    ladder = maak_obby_deel(positie, schaal, kleur_blok, 0.12, -0.18)
+    ladder = maak_obby_deel(positie, schaal, kleur_blok, "ladder")
     ladder.is_muur = False
     return ladder
 
 
 def maak_boostpad(positie, schaal, kleur_blok):
     """Maak een fel snelheidsvlak dat je vooruit duwt."""
-    pad = maak_obby_deel(positie, schaal, kleur_blok, 0.32, -0.1)
+    pad = maak_obby_deel(positie, schaal, kleur_blok, "boost")
     pad.is_muur = False
     return pad
 
@@ -716,9 +797,10 @@ class ZwevendeSter(Entity):
         super().__init__(
             model="sphere",
             shader=unlit_shader,
-            color=color.yellow,
+            color=color.white,
             position=vec3_van(positie),
             scale=0.8,
+            texture=maak_pixel_textuur((255, 220, 80), "finish"),
             collider="sphere",
         )
         self.nummer = nummer
@@ -787,49 +869,55 @@ class ComputerSpeler(Entity):
             parent=self,
             model="cube",
             shader=unlit_shader,
-            color=self.kleding_kleur,
+            color=color.white,
             position=(0, 0.9, 0),
             scale=(0.72, 0.9, 0.36),
+            texture=maak_pixel_textuur(self.kleding_kleur, "speler-kleding"),
         )
         self.hoofd = Entity(
             parent=self,
             model="cube",
             shader=unlit_shader,
-            color=self.huid_kleur,
+            color=color.white,
             position=(0, 1.62, 0),
             scale=(0.48, 0.48, 0.48),
+            texture=maak_pixel_textuur(self.huid_kleur, "speler-huid"),
         )
         self.linker_arm = Entity(
             parent=self,
             model="cube",
             shader=unlit_shader,
-            color=self.kleding_kleur,
+            color=color.white,
             position=(-0.48, 0.92, 0),
             scale=(0.18, 0.78, 0.18),
+            texture=maak_pixel_textuur(self.kleding_kleur, "speler-kleding"),
         )
         self.rechter_arm = Entity(
             parent=self,
             model="cube",
             shader=unlit_shader,
-            color=self.kleding_kleur,
+            color=color.white,
             position=(0.48, 0.92, 0),
             scale=(0.18, 0.78, 0.18),
+            texture=maak_pixel_textuur(self.kleding_kleur, "speler-kleding"),
         )
         self.linker_been = Entity(
             parent=self,
             model="cube",
             shader=unlit_shader,
-            color=self.broek_kleur,
+            color=color.white,
             position=(-0.18, 0.24, 0),
             scale=(0.22, 0.84, 0.22),
+            texture=maak_pixel_textuur(self.broek_kleur, "speler-broek"),
         )
         self.rechter_been = Entity(
             parent=self,
             model="cube",
             shader=unlit_shader,
-            color=self.broek_kleur,
+            color=color.white,
             position=(0.18, 0.24, 0),
             scale=(0.22, 0.84, 0.22),
+            texture=maak_pixel_textuur(self.broek_kleur, "speler-broek"),
         )
 
     def zet_houding(self, fase=0.0, in_lucht=False, gevallen=False):
@@ -1048,14 +1136,16 @@ def maak_wereld():
         shader=unlit_shader,
         position=(0, -3.5, 0),
         scale=(180, 2.0, 180),
-        color=maak_rgb_kleur(OBBY_BASISPLAAT_KLEUR),
+        color=color.white,
+        texture=maak_pixel_textuur(OBBY_BASISPLAAT_KLEUR, "grond"),
     )
     Entity(
         model="cube",
         shader=unlit_shader,
         position=(START_PUNT.x, -0.8, START_PUNT.z),
         scale=(18, 0.6, 18),
-        color=maak_rgb_kleur(OBBY_SPAWN_KLEUR),
+        color=color.white,
+        texture=maak_pixel_textuur(OBBY_SPAWN_KLEUR, "spawn"),
     )
 
     # Dit is de mist onder de baan. Als je daaronder valt, ga je terug.
@@ -1063,16 +1153,18 @@ def maak_wereld():
         model="plane",
         position=(0, -14, 0),
         scale=160,
-        color=maak_rgb_kleur((255, 95, 70), 1.0),
+        color=color.white,
+        texture=maak_pixel_textuur((255, 95, 70), "lava"),
     )
 
     for checkpoint_info in CHECKPOINT_DATA:
         checkpoint = Entity(
             model="cube",
             shader=unlit_shader,
-            color=checkpoint_info["kleur"],
+            color=color.white,
             position=vec3_van(checkpoint_info["positie"]),
             scale=(2.8, 0.3, 2.8),
+            texture=maak_pixel_textuur(checkpoint_info["kleur"], "checkpoint"),
             collider="box",
         )
         checkpoint.actief = False
@@ -1096,16 +1188,25 @@ def maak_wereld():
         shader=unlit_shader,
         position=(DOEL_POSITIE.x, DOEL_POSITIE.y + 1.0, DOEL_POSITIE.z),
         scale=(0.25, 7, 0.25),
-        color=kleur_van_level(AANTAL_LEVELS - 1, 0.78),
+        color=color.white,
+        texture=maak_pixel_textuur(kleur_van_level(AANTAL_LEVELS - 1, 0.78), "finish"),
     )
     Entity(
         model="cube",
         shader=unlit_shader,
         position=(DOEL_POSITIE.x + 1.1, DOEL_POSITIE.y + 3.6, DOEL_POSITIE.z),
         scale=(2.4, 1.4, 0.15),
-        color=kleur_van_level(AANTAL_LEVELS - 1, 1.25),
+        color=color.white,
+        texture=maak_pixel_textuur(kleur_van_level(AANTAL_LEVELS - 1, 1.25), "finish"),
     )
-    Entity(model="sphere", shader=unlit_shader, position=DOEL_POSITIE, scale=1.7, color=kleur_van_level(AANTAL_LEVELS - 1, 1.35))
+    Entity(
+        model="sphere",
+        shader=unlit_shader,
+        position=DOEL_POSITIE,
+        scale=1.7,
+        color=color.white,
+        texture=maak_pixel_textuur(kleur_van_level(AANTAL_LEVELS - 1, 1.35), "finish"),
+    )
 
     maak_wolken()
 
