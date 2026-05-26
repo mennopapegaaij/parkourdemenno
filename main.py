@@ -769,16 +769,13 @@ class ComputerSpeler(Entity):
     """Een hulp-speler die vanzelf de route voordoet."""
 
     def __init__(self, nummer, pad_punten, start_offset, kleur_rgb, extra_vertaging=0.0):
-        super().__init__(
-            model="cube",
-            shader=unlit_shader,
-            color=maak_rgb_kleur(kleur_rgb, 1.1),
-            position=pad_punten[0] + start_offset,
-            scale=(0.9, 1.5, 0.9),
-        )
+        super().__init__(position=pad_punten[0] + start_offset)
         self.nummer = nummer
         self.pad_punten = pad_punten
         self.start_offset = start_offset
+        self.kleding_kleur = maak_rgb_kleur(kleur_rgb, 1.05)
+        self.broek_kleur = maak_rgb_kleur(kleur_rgb, 0.62)
+        self.huid_kleur = maak_rgb_kleur((255, 220, 190), 1.0)
         self.profiel = maak_helper_profiel(nummer)
         self.start_vertaging = COMPUTER_SPELER_START_VERTAGING + extra_vertaging
         self.rng = Random(7000 + nummer)
@@ -799,7 +796,78 @@ class ComputerSpeler(Entity):
         self.val_snelheid = 0.0
         self.val_richting = Vec3(0, 0, 0)
         self.klaar = False
+        self.maak_uiterlijk()
         self.reset()
+
+    def maak_uiterlijk(self):
+        """Bouw een simpele speler met hoofd, lijf, armen en benen."""
+        self.lichaam = Entity(
+            parent=self,
+            model="cube",
+            shader=unlit_shader,
+            color=self.kleding_kleur,
+            position=(0, 0.9, 0),
+            scale=(0.72, 0.9, 0.36),
+        )
+        self.hoofd = Entity(
+            parent=self,
+            model="cube",
+            shader=unlit_shader,
+            color=self.huid_kleur,
+            position=(0, 1.62, 0),
+            scale=(0.48, 0.48, 0.48),
+        )
+        self.linker_arm = Entity(
+            parent=self,
+            model="cube",
+            shader=unlit_shader,
+            color=self.kleding_kleur,
+            position=(-0.48, 0.92, 0),
+            scale=(0.18, 0.78, 0.18),
+        )
+        self.rechter_arm = Entity(
+            parent=self,
+            model="cube",
+            shader=unlit_shader,
+            color=self.kleding_kleur,
+            position=(0.48, 0.92, 0),
+            scale=(0.18, 0.78, 0.18),
+        )
+        self.linker_been = Entity(
+            parent=self,
+            model="cube",
+            shader=unlit_shader,
+            color=self.broek_kleur,
+            position=(-0.18, 0.24, 0),
+            scale=(0.22, 0.84, 0.22),
+        )
+        self.rechter_been = Entity(
+            parent=self,
+            model="cube",
+            shader=unlit_shader,
+            color=self.broek_kleur,
+            position=(0.18, 0.24, 0),
+            scale=(0.22, 0.84, 0.22),
+        )
+
+    def zet_houding(self, fase=0.0, in_lucht=False, gevallen=False):
+        """Laat armen en benen bewegen zodat het op een speler lijkt."""
+        if gevallen:
+            been_hoek = 55
+            arm_hoek = -35
+        elif in_lucht:
+            been_hoek = 18 + sin(fase * pi) * 10
+            arm_hoek = -12 - sin(fase * pi) * 8
+        else:
+            been_hoek = sin(fase * pi * 2) * 18
+            arm_hoek = -been_hoek * 0.75
+
+        self.linker_been.rotation_x = been_hoek
+        self.rechter_been.rotation_x = -been_hoek
+        self.linker_arm.rotation_x = arm_hoek
+        self.rechter_arm.rotation_x = -arm_hoek
+        self.hoofd.rotation_z = sin(fase * pi) * 3 if not gevallen else 18
+        self.lichaam.rotation_z = 0 if not gevallen else 10
 
     def reset(self):
         """Zet de hulp-speler weer netjes terug naar het begin."""
@@ -817,6 +885,7 @@ class ComputerSpeler(Entity):
         self.val_richting = Vec3(0, 0, 0)
         self.rotation_z = 0
         self.klaar = False
+        self.zet_houding()
         self.draai_naar(self.pad_punten[self.doel_index])
         self.bereid_volgende_sprong_voor()
 
@@ -878,12 +947,14 @@ class ComputerSpeler(Entity):
         self.wacht_tijd = 0.6 + self.extra_pauze
         self.val_snelheid = 0.0
         self.rotation_z = 0
+        self.zet_houding()
         self.bereid_volgende_sprong_voor()
 
     def beweeg(self):
         """Laat de hulp-speler van blok naar blok springen."""
         if self.klaar:
             self.y = self.pad_punten[-1].y + 0.18 * sin(perf_counter() * 2.4)
+            self.zet_houding(0.5, in_lucht=False)
             return
 
         if self.valt:
@@ -894,12 +965,14 @@ class ComputerSpeler(Entity):
                 self.val_richting.z * 2.6 * time.dt,
             )
             self.rotation_z = min(80, self.rotation_z + 220 * time.dt)
+            self.zet_houding(1.0, gevallen=True)
             if self.position.y < self.laatste_veilige_plek.y - 7:
                 self.herstel_na_val()
             return
 
         if self.wacht_tijd > 0:
             self.wacht_tijd = max(0.0, self.wacht_tijd - time.dt)
+            self.zet_houding(0.0, in_lucht=False)
             return
 
         doel = self.pad_punten[self.doel_index]
@@ -915,6 +988,7 @@ class ComputerSpeler(Entity):
             basis.y + boog,
             basis.z + zijkant.z * zijzwaai,
         )
+        self.zet_houding(voortgang, in_lucht=True)
 
         if voortgang >= 1.0:
             self.position = doel
@@ -922,6 +996,7 @@ class ComputerSpeler(Entity):
             self.segment_start = Vec3(doel.x, doel.y, doel.z)
             self.doel_index += 1
             self.segment_voortgang = 0.0
+            self.zet_houding(0.0, in_lucht=False)
             self.krijgt_boost()
             if self.moet_vallen():
                 self.start_val()
