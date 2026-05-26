@@ -628,33 +628,15 @@ laatste_muursprong_tijd = 0.0
 
 
 def maak_obby_deel(positie, schaal, kleur_blok, top_helder=0.16, rand_donker=-0.12):
-    """Maak een blok met een lichte bovenkant zoals een obby-part."""
-    blok = Entity(
+    """Maak een simpel obby-blok zonder lichte bovenkant."""
+    return Entity(
         model="cube",
         shader=unlit_shader,
-        color=kleur_blok.tint(-0.03),
+        color=kleur_blok,
         position=vec3_van(positie),
         scale=schaal,
         collider="box",
     )
-    top_dikte = max(0.08, min(0.24, schaal[1] * 0.24))
-    Entity(
-        parent=blok,
-        model="cube",
-        shader=unlit_shader,
-        color=kleur_blok.tint(top_helder),
-        y=0.5 - top_dikte / schaal[1] / 2,
-        scale=(0.96, top_dikte / schaal[1], 0.96),
-    )
-    Entity(
-        parent=blok,
-        model="cube",
-        shader=unlit_shader,
-        color=kleur_blok.tint(rand_donker),
-        y=-0.5 + top_dikte / schaal[1] / 2,
-        scale=(1.0, top_dikte / schaal[1], 1.0),
-    )
-    return blok
 
 
 def maak_platform(positie, schaal, kleur_blok):
