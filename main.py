@@ -57,8 +57,9 @@ BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
 PIJLTJES_DRAAI_SNELHEID = 150
 PIJLTJES_KIJK_SNELHEID = 95
 SPELER_SPRONGHOOGTE = 2.8
-SPELER_SPRONG_DUUR = 0.5
-SPELER_ZWAARTEKRACHT = 1.55
+SPELER_SPRONG_DUUR = 0.42
+SPELER_ZWAARTEKRACHT = 1.95
+SPELER_VAL_START = 0.24
 COMPUTER_SPELER_AANTAL = 16
 COMPUTER_SPELER_SNELHEID = 8.2
 COMPUTER_SPELER_SPRONGHOOGTE = SPELER_SPRONGHOOGTE
@@ -695,6 +696,7 @@ verzamelde_sterren = set()
 actieve_platforms = {}
 actieve_muren = {}
 spawn_punt = Vec3(START_PUNT.x, START_PUNT.y, START_PUNT.z)
+laatste_veilige_speler_positie = Vec3(START_PUNT.x, START_PUNT.y, START_PUNT.z)
 gehaalde_sterren = 0
 gewonnen = False
 start_tijd = perf_counter()
@@ -1334,7 +1336,7 @@ def zet_checkpoint_status(checkpoint_lijst):
 
 def laad_voortgang():
     """Laad het vorige potje als er een opslagbestand is."""
-    global spawn_punt, gehaalde_sterren, start_tijd, verzamelde_sterren, laatste_opslag_tijd
+    global spawn_punt, gehaalde_sterren, start_tijd, verzamelde_sterren, laatste_opslag_tijd, laatste_veilige_speler_positie
 
     if not OPSLAG_BESTAND.exists():
         return False
@@ -1391,6 +1393,7 @@ def laad_voortgang():
         player.rotation_y = START_ROTATIE_Y
     player.camera_pivot.rotation_x = lees_getal(opslag.get("kijk_x"), 0.0)
     player.air_time = 0
+    laatste_veilige_speler_positie = Vec3(player.x, player.y, player.z)
     vernieuw_actieve_baan(force=True)
 
     maak_sterren_opnieuw()
@@ -1425,6 +1428,66 @@ def speler_staat_op_vlak(speler_punt, vlak, marge=0.2):
     )
 
 
+def speler_zit_in_muur(positie, marge=0.22):
+    """Kijk of het midden van de speler te diep in een muur zit."""
+    controle_punten = (Vec3(0, 0.9, 0), Vec3(0, 1.6, 0))
+    richtingen = (Vec3(1, 0, 0), Vec3(-1, 0, 0), Vec3(0, 0, 1), Vec3(0, 0, -1))
+
+    for controle_punt in controle_punten:
+        for richting in richtingen:
+            raak = raycast(positie + controle_punt, richting, distance=marge, ignore=(player,))
+            if raak.hit and getattr(raak.entity, "is_muur", False):
+                return True
+
+    return False
+
+
+def onthoud_veilige_speler_positie():
+    """Bewaar een plek waar de speler niet in een muur staat."""
+    global laatste_veilige_speler_positie
+
+    if not speler_zit_in_muur(player.position):
+        laatste_veilige_speler_positie = Vec3(player.x, player.y, player.z)
+
+
+def verplaats_speler_veilig(verplaatsing):
+    """Verplaats de speler in kleine stapjes zodat hij niet door muren glijdt."""
+    global laatste_veilige_speler_positie
+
+    begin = Vec3(player.x, player.y, player.z)
+    grootste_stap = max(abs(verplaatsing.x), abs(verplaatsing.y), abs(verplaatsing.z))
+    aantal_stappen = max(1, int(grootste_stap / 0.28) + 1)
+    stap = Vec3(
+        verplaatsing.x / aantal_stappen,
+        verplaatsing.y / aantal_stappen,
+        verplaatsing.z / aantal_stappen,
+    )
+    huidige_positie = Vec3(begin.x, begin.y, begin.z)
+
+    for _ in range(aantal_stappen):
+        kandidaat = huidige_positie + stap
+        if speler_zit_in_muur(kandidaat):
+            break
+        huidige_positie = kandidaat
+
+    player.position = huidige_positie
+    if not speler_zit_in_muur(player.position):
+        laatste_veilige_speler_positie = Vec3(player.x, player.y, player.z)
+
+    return distance(begin, player.position) > 0.01
+
+
+def herstel_speler_uit_muur():
+    """Zet de speler terug als hij toch in een muur is gekomen."""
+    if speler_zit_in_muur(player.position):
+        player.position = Vec3(
+            laatste_veilige_speler_positie.x,
+            laatste_veilige_speler_positie.y,
+            laatste_veilige_speler_positie.z,
+        )
+        player.air_time = 0
+
+
 def gebruik_springblok():
     """Schiet de speler omhoog en vooruit vanaf een fel blok."""
     global laatste_springblok_tijd
@@ -1438,7 +1501,7 @@ def gebruik_springblok():
     for springblok in springblokken:
         if speler_staat_op_vlak(speler_hoogte, springblok):
             richting = kijk_richting()
-            player.position = player.position + Vec3(richting.x * 5.0, 4.2, richting.z * 5.0)
+            verplaats_speler_veilig(Vec3(richting.x * 5.0, 4.2, richting.z * 5.0))
             player.air_time = 0
             laatste_springblok_tijd = nu
             vernieuw_actieve_baan(force=True)
@@ -1459,7 +1522,7 @@ def gebruik_boostpad():
     for boostpad in boostpads:
         if speler_staat_op_vlak(speler_hoogte, boostpad):
             richting = kijk_richting()
-            player.position = player.position + Vec3(richting.x * 7.5, 1.0, richting.z * 7.5)
+            verplaats_speler_veilig(Vec3(richting.x * 7.5, 1.0, richting.z * 7.5))
             player.air_time = 0
             laatste_boostpad_tijd = nu
             vernieuw_actieve_baan(force=True)
@@ -1478,7 +1541,7 @@ def klim_ladder():
         if held_keys["w"]:
             player.x = ladder.x
             player.z = ladder.z
-            player.position = player.position + Vec3(0, 5.6 * time.dt, 0)
+            verplaats_speler_veilig(Vec3(0, 5.6 * time.dt, 0))
             player.air_time = 0
             vernieuw_actieve_baan(force=True)
             return True
@@ -1486,7 +1549,7 @@ def klim_ladder():
         if held_keys["s"]:
             player.x = ladder.x
             player.z = ladder.z
-            player.position = player.position + Vec3(0, -3.8 * time.dt, 0)
+            verplaats_speler_veilig(Vec3(0, -3.8 * time.dt, 0))
             player.air_time = 0
             vernieuw_actieve_baan(force=True)
             return True
@@ -1523,7 +1586,7 @@ def doe_muursprong():
     if sprong is None:
         return False
 
-    player.position = player.position + sprong
+    verplaats_speler_veilig(sprong)
     player.air_time = 0
     laatste_muursprong_tijd = nu
     vernieuw_actieve_baan(force=True)
@@ -1561,10 +1624,13 @@ def moeilijkheid_tekst(level_nummer):
 
 def zet_speler_terug(tekst):
     """Zet de speler terug op het laatste veilige punt."""
+    global laatste_veilige_speler_positie
+
     player.position = Vec3(spawn_punt.x, spawn_punt.y, spawn_punt.z)
     player.rotation_y = START_ROTATIE_Y
     player.camera_pivot.rotation_x = 0
     player.air_time = 0
+    laatste_veilige_speler_positie = Vec3(player.x, player.y, player.z)
     vernieuw_actieve_baan(force=True)
     toon_melding(tekst)
 
@@ -1636,6 +1702,7 @@ player.rotation_y = START_ROTATIE_Y
 player.speed = START_SNELHEID
 player.jump_height = SPELER_SPRONGHOOGTE
 player.jump_up_duration = SPELER_SPRONG_DUUR
+player.fall_after = SPELER_VAL_START
 player.gravity = SPELER_ZWAARTEKRACHT
 player.cursor.color = color.black
 vernieuw_actieve_baan(force=True)
@@ -1685,11 +1752,13 @@ def update():
 
     draai_met_pijltjes()
     vernieuw_actieve_baan()
+    herstel_speler_uit_muur()
     for computer_speler in computer_spelers:
         computer_speler.beweeg()
     klim_ladder()
     gebruik_boostpad()
     gebruik_springblok()
+    onthoud_veilige_speler_positie()
 
     if melding_tijd > 0:
         melding_tijd -= time.dt
