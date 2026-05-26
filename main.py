@@ -32,6 +32,9 @@ START_PUNT = Vec3(0, 2, 0)
 START_SNELHEID = 7
 AUTO_OPSLAAN_TIJD = 1.0
 OPSLAG_BESTAND = Path(__file__).with_name("savegame.json")
+OBBY_LUCHT_KLEUR = (120, 205, 255)
+OBBY_BASISPLAAT_KLEUR = (110, 195, 95)
+OBBY_SPAWN_KLEUR = (240, 240, 240)
 LAAD_HOOGTE_BOVEN = 90
 LAAD_HOOGTE_ONDER = 55
 LAAD_VERNIEUW_HOOGTE = 14
@@ -50,6 +53,8 @@ BOOSTPAD_SCHAAL = (2.4, 0.2, 2.4)
 PIJLTJES_DRAAI_SNELHEID = 150
 PIJLTJES_KIJK_SNELHEID = 95
 SPELER_SPRONGHOOGTE = 2.8
+SPELER_SPRONG_DUUR = 0.5
+SPELER_ZWAARTEKRACHT = 1.55
 COMPUTER_SPELER_AANTAL = 16
 COMPUTER_SPELER_SNELHEID = 8.2
 COMPUTER_SPELER_SPRONGHOOGTE = SPELER_SPRONGHOOGTE
@@ -73,13 +78,13 @@ STIJL_NAMEN = [
 ]
 
 REGENBOOG_RGB = [
-    (255, 90, 90),
-    (255, 160, 70),
-    (255, 220, 80),
-    (120, 235, 110),
-    (90, 220, 255),
-    (120, 150, 255),
-    (220, 120, 255),
+    (255, 85, 85),
+    (255, 170, 70),
+    (255, 235, 90),
+    (105, 225, 110),
+    (85, 225, 255),
+    (100, 150, 255),
+    (230, 120, 255),
 ]
 
 STIJL_Z_PATROON = [
@@ -594,11 +599,11 @@ START_ROTATIE_Y = degrees(atan2(EERSTE_SPRONG_POSITIE.x - START_PUNT.x, EERSTE_S
 app = Ursina()
 window.title = TITEL
 window.borderless = False
-window.color = maak_rgb_kleur((32, 44, 96))
+window.color = maak_rgb_kleur(OBBY_LUCHT_KLEUR)
 window.exit_button.visible = False
 window.fps_counter.enabled = True
 camera.fov = 95
-camera.clear_color = maak_rgb_kleur((32, 44, 96))
+camera.clear_color = maak_rgb_kleur(OBBY_LUCHT_KLEUR)
 
 sterren = []
 boostpads = []
@@ -622,72 +627,67 @@ laatste_springblok_tijd = 0.0
 laatste_muursprong_tijd = 0.0
 
 
-def maak_platform(positie, schaal, kleur_blok):
-    """Maak een springblok waar de speler op kan landen."""
+def maak_obby_deel(positie, schaal, kleur_blok, top_helder=0.16, rand_donker=-0.12):
+    """Maak een blok met een lichte bovenkant zoals een obby-part."""
     blok = Entity(
         model="cube",
         shader=unlit_shader,
-        color=kleur_blok,
+        color=kleur_blok.tint(-0.03),
         position=vec3_van(positie),
         scale=schaal,
         collider="box",
     )
+    top_dikte = max(0.08, min(0.24, schaal[1] * 0.24))
+    Entity(
+        parent=blok,
+        model="cube",
+        shader=unlit_shader,
+        color=kleur_blok.tint(top_helder),
+        y=0.5 - top_dikte / schaal[1] / 2,
+        scale=(0.96, top_dikte / schaal[1], 0.96),
+    )
+    Entity(
+        parent=blok,
+        model="cube",
+        shader=unlit_shader,
+        color=kleur_blok.tint(rand_donker),
+        y=-0.5 + top_dikte / schaal[1] / 2,
+        scale=(1.0, top_dikte / schaal[1], 1.0),
+    )
+    return blok
+
+
+def maak_platform(positie, schaal, kleur_blok):
+    """Maak een springblok waar de speler op kan landen."""
+    blok = maak_obby_deel(positie, schaal, kleur_blok, 0.2, -0.16)
     blok.is_muur = False
     return blok
 
 
 def maak_muur(positie, schaal, kleur_blok):
     """Maak een hoge muur langs de springroute."""
-    muur = Entity(
-        model="cube",
-        shader=unlit_shader,
-        color=kleur_blok,
-        position=vec3_van(positie),
-        scale=schaal,
-        collider="box",
-    )
+    muur = maak_obby_deel(positie, schaal, kleur_blok, 0.08, -0.2)
     muur.is_muur = True
     return muur
 
 
 def maak_springblok(positie, schaal, kleur_blok):
     """Maak een fel blok dat je extra ver omhoog schiet."""
-    blok = Entity(
-        model="cube",
-        shader=unlit_shader,
-        color=kleur_blok,
-        position=vec3_van(positie),
-        scale=schaal,
-        collider="box",
-    )
+    blok = maak_obby_deel(positie, schaal, kleur_blok, 0.28, -0.08)
     blok.is_muur = False
     return blok
 
 
 def maak_ladder(positie, schaal, kleur_blok):
     """Maak een ladder waar je omhoog kunt klimmen."""
-    ladder = Entity(
-        model="cube",
-        shader=unlit_shader,
-        color=kleur_blok,
-        position=vec3_van(positie),
-        scale=schaal,
-        collider="box",
-    )
+    ladder = maak_obby_deel(positie, schaal, kleur_blok, 0.12, -0.18)
     ladder.is_muur = False
     return ladder
 
 
 def maak_boostpad(positie, schaal, kleur_blok):
     """Maak een fel snelheidsvlak dat je vooruit duwt."""
-    pad = Entity(
-        model="cube",
-        shader=unlit_shader,
-        color=kleur_blok,
-        position=vec3_van(positie),
-        scale=schaal,
-        collider="box",
-    )
+    pad = maak_obby_deel(positie, schaal, kleur_blok, 0.32, -0.1)
     pad.is_muur = False
     return pad
 
@@ -1057,15 +1057,31 @@ def maak_wolken():
 
 def maak_wereld():
     """Bouw de hele parkourtoren."""
-    AmbientLight(color=maak_rgb_kleur((180, 180, 220), alpha=120))
-    DirectionalLight(y=25, z=10, rotation=(45, -35, 0))
+    AmbientLight(color=maak_rgb_kleur((235, 235, 255), alpha=130))
+    DirectionalLight(y=25, z=10, rotation=(40, -28, 0))
+
+    # Een grote groene basisplaat geeft het begin meer obby-gevoel.
+    Entity(
+        model="cube",
+        shader=unlit_shader,
+        position=(0, -3.5, 0),
+        scale=(180, 2.0, 180),
+        color=maak_rgb_kleur(OBBY_BASISPLAAT_KLEUR),
+    )
+    Entity(
+        model="cube",
+        shader=unlit_shader,
+        position=(START_PUNT.x, -0.8, START_PUNT.z),
+        scale=(18, 0.6, 18),
+        color=maak_rgb_kleur(OBBY_SPAWN_KLEUR),
+    )
 
     # Dit is de mist onder de baan. Als je daaronder valt, ga je terug.
     Entity(
         model="plane",
         position=(0, -14, 0),
         scale=160,
-        color=color.red.tint(-0.15),
+        color=maak_rgb_kleur((255, 95, 70), 1.0),
     )
 
     for checkpoint_info in CHECKPOINT_DATA:
@@ -1536,8 +1552,8 @@ player = FirstPersonController(position=START_PUNT)
 player.rotation_y = START_ROTATIE_Y
 player.speed = START_SNELHEID
 player.jump_height = SPELER_SPRONGHOOGTE
-player.jump_up_duration = 0.42
-player.gravity = 1
+player.jump_up_duration = SPELER_SPRONG_DUUR
+player.gravity = SPELER_ZWAARTEKRACHT
 player.cursor.color = color.black
 vernieuw_actieve_baan(force=True)
 maak_computer_spelers()
